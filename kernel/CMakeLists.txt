@@ -32,6 +32,7 @@ file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/lambda/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/src/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/scanner/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/log/src/*.c
 )
@@ -44,6 +45,7 @@ file(GLOB_RECURSE KERNEL_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/lambda/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/*.c
 )
 
 file(GLOB_RECURSE KERNEL_HEADERS
@@ -55,6 +57,7 @@ file(GLOB_RECURSE KERNEL_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/lambda/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/include/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/log/include/*.h
 )
 
@@ -78,6 +81,7 @@ target_include_directories(ak24_kernel PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/lambda/include
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/include
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include
     ${CMAKE_CURRENT_SOURCE_DIR}/log/include
 )
 
@@ -106,6 +110,7 @@ file(GLOB_RECURSE ALL_COMPILE_TIME_TESTS
     ${CMAKE_CURRENT_SOURCE_DIR}/context/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/buffer/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/*.c
 )
 
 file(GLOB BUFFER_TEST_SOURCES
@@ -137,9 +142,39 @@ add_custom_command(TARGET ${TEST_TARGET} POST_BUILD
     VERBATIM
 )
 
+file(GLOB SCANNER_TEST_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/scanner_tests.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/scanner_find_group_tests.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/scanner_stress_test.c
+)
+
+set(TEST_TARGET "ak24_scanner_test_runner")
+set(TEST_BINARY "${CMAKE_BINARY_DIR}/test/compile_time/${TEST_TARGET}")
+add_executable(${TEST_TARGET}
+    ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/scanner_test_runner.c
+    ${SCANNER_TEST_SOURCES}
+)
+target_link_libraries(${TEST_TARGET} PRIVATE ak24_kernel)
+target_include_directories(${TEST_TARGET} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/test
+)
+set_target_properties(${TEST_TARGET} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/test/compile_time
+    EXCLUDE_FROM_ALL FALSE
+)
+add_custom_command(TARGET ${TEST_TARGET} POST_BUILD
+    COMMAND ${TEST_BINARY}
+    COMMENT "Running compile-time test: ${TEST_TARGET}"
+    VERBATIM
+)
+
 list(REMOVE_ITEM ALL_COMPILE_TIME_TESTS
     ${CMAKE_CURRENT_SOURCE_DIR}/buffer/test/buffer_test_runner.c
     ${BUFFER_TEST_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/scanner_test_runner.c
+    ${SCANNER_TEST_SOURCES}
 )
 
 foreach(TEST_FILE ${ALL_COMPILE_TIME_TESTS})

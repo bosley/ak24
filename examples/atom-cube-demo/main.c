@@ -24,18 +24,26 @@ APP_ON_SHUTDOWN(on_shutdown) {
 #endif
 }
 
-static void print_cube_layer(ak_atom_t *cube[3][3][3], int z) {
+static void print_cube_layer(ak_atom_t ****cube, int size, int z) {
   printf("\n  Layer z=%d:\n", z);
-  printf("  ┌─────────────┐\n");
-  for (int y = 0; y < 3; y++) {
+  printf("  ┌");
+  for (int x = 0; x < size; x++) {
+    printf("────");
+  }
+  printf("─┐\n");
+  for (int y = 0; y < size; y++) {
     printf("  │ ");
-    for (int x = 0; x < 3; x++) {
+    for (int x = 0; x < size; x++) {
       ak_atom_value_u val = ak_atom_get_value(cube[x][y][z]);
       printf("%3d ", val.i32);
     }
     printf("│\n");
   }
-  printf("  └─────────────┘\n");
+  printf("  └");
+  for (int x = 0; x < size; x++) {
+    printf("────");
+  }
+  printf("─┘\n");
 }
 
 typedef struct {
@@ -255,7 +263,7 @@ static void animate_rotating_cube(ak_atom_t ****cube, int size) {
   }
 }
 
-static void demonstrate_neighbors(ak_atom_t *cube[3][3][3]) {
+static void demonstrate_neighbors(ak_atom_t ****cube) {
   printf("\n╔═══════════════════════════════════════╗\n");
   printf("║      Neighbor Query Demonstrations    ║\n");
   printf("╚═══════════════════════════════════════╝\n");
@@ -302,24 +310,28 @@ static void demonstrate_neighbors(ak_atom_t *cube[3][3][3]) {
   }
 }
 
-static void demonstrate_value_updates(ak_atom_t *cube[3][3][3]) {
+static void demonstrate_value_updates(ak_atom_t ****cube, int size) {
   printf("\n╔═══════════════════════════════════════╗\n");
   printf("║      Atomic Value Updates Demo        ║\n");
   printf("╚═══════════════════════════════════════╝\n");
 
-  printf("\nOriginal center atom [1,1,1] value: %d\n",
-         ak_atom_get_value(cube[1][1][1]).i32);
+  int center = size / 2;
+  printf("\nOriginal center atom [%d,%d,%d] value: %d\n", center, center,
+         center, ak_atom_get_value(cube[center][center][center]).i32);
 
   printf("Updating to 999...\n");
-  ak_atom_set_value(cube[1][1][1], (ak_atom_value_u){.i32 = 999});
+  ak_atom_set_value(cube[center][center][center],
+                    (ak_atom_value_u){.i32 = 999});
 
-  printf("New center atom [1,1,1] value: %d\n",
-         ak_atom_get_value(cube[1][1][1]).i32);
+  printf("New center atom [%d,%d,%d] value: %d\n", center, center, center,
+         ak_atom_get_value(cube[center][center][center]).i32);
 
-  print_cube_layer(cube, 1);
+  print_cube_layer(cube, size, center);
 
   printf("\nRestoring original value...\n");
-  ak_atom_set_value(cube[1][1][1], (ak_atom_value_u){.i32 = 13});
+  int original_value = center + center * size + center * size * size;
+  ak_atom_set_value(cube[center][center][center],
+                    (ak_atom_value_u){.i32 = original_value});
 }
 
 APP_MAIN(app_main) {
@@ -389,7 +401,7 @@ APP_MAIN(app_main) {
 
   demonstrate_neighbors(cube);
 
-  demonstrate_value_updates(cube);
+  demonstrate_value_updates(cube, size);
 
   printf("\nCleaning up...\n");
   for (int x = 0; x < size; x++) {

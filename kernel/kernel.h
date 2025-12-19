@@ -9,6 +9,7 @@
 #include "list.h"
 #include "log.h"
 #include "map.h"
+#include "scanner.h"
 
 #include <pthread.h>
 #include <stddef.h>

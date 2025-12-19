@@ -49,11 +49,16 @@ Instances are runtime values that reference their form:
 - Passed to affect lambdas for mutation
 - Form pointer determines available affordances
 
-## Lifetime Model
+## Ownership Model
 
-- **Primitives**: eternal singletons, never freed
-- **User-defined forms**: stored in contexts, live until context cleanup
-- **Instances**: runtime values that reference forms (which outlive them)
+Forms use deep-copy semantics with explicit ownership:
+
+- **Form constructors deep-copy inputs**: When you create a form with `ak_form_new_*()`, it clones all child forms. The caller retains ownership of the inputs.
+- **Caller owns returned forms**: The form returned by constructors must be freed by the caller with `ak_form_free()`.
+- **Deep-free is safe**: Since each form owns its children, `ak_form_free()` recursively frees the entire form tree.
+- **Contexts are lookup-only**: Registering a form in a context with `ak_form_register()` does not transfer ownership - the caller must still free the form.
+- **root_form_ctx manages primitives**: Use `ak_root_form_ctx_new()` to get a context that owns and manages primitive forms. Call `ak_root_form_ctx_free()` to clean up.
+- **Instances reference forms**: Runtime instances hold pointers to forms, which must outlive the instances.
 
 ## Structural Typing
 
@@ -63,6 +68,21 @@ Forms are matched by structure, not by name. Two forms are compatible if they ha
 ak_form_t *form1 = ak_form_new_compound(...); // i32 i32
 ak_form_t *form2 = ak_form_new_compound(...); // i32 i32
 ak_form_is_compatible(form1, form2); // true - same structure
+
+ak_form_free(form1);
+ak_form_free(form2);
+```
+
+## Usage Example
+
+```c
+root_form_ctx_t *root = ak_root_form_ctx_new();
+
+ak_form_t *i32 = ak_root_form_ctx_get_i32(root);
+ak_form_t *optional_i32 = ak_form_new_optional(i32);
+
+ak_root_form_ctx_free(root);
+ak_form_free(optional_i32);
 ```
 
 ## Struct Forms

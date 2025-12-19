@@ -36,9 +36,13 @@ static int test_optional_form_creation(void) {
 
   AK24_TEST_ASSERT_NOT_NULL(optional);
   AK24_TEST_ASSERT_EQ(optional->kind, AK_FORM_OPTIONAL);
-  AK24_TEST_ASSERT_EQ(optional->data.optional.inner, inner);
+  AK24_TEST_ASSERT_NEQ(optional->data.optional.inner, inner);
+  AK24_TEST_ASSERT_EQ(optional->data.optional.inner->kind, AK_FORM_PRIMITIVE);
+  AK24_TEST_ASSERT_EQ(optional->data.optional.inner->data.primitive,
+                      AK24_ATOM_I32);
 
   ak_form_free(optional);
+  ak_form_free(inner);
   AK24_TEST_PASS();
 }
 
@@ -48,9 +52,14 @@ static int test_repeatable_form_creation(void) {
 
   AK24_TEST_ASSERT_NOT_NULL(repeatable);
   AK24_TEST_ASSERT_EQ(repeatable->kind, AK_FORM_REPEATABLE);
-  AK24_TEST_ASSERT_EQ(repeatable->data.repeatable.inner, inner);
+  AK24_TEST_ASSERT_NEQ(repeatable->data.repeatable.inner, inner);
+  AK24_TEST_ASSERT_EQ(repeatable->data.repeatable.inner->kind,
+                      AK_FORM_PRIMITIVE);
+  AK24_TEST_ASSERT_EQ(repeatable->data.repeatable.inner->data.primitive,
+                      AK24_ATOM_I8);
 
   ak_form_free(repeatable);
+  ak_form_free(inner);
   AK24_TEST_PASS();
 }
 
@@ -89,9 +98,14 @@ static int test_list_form_creation(void) {
 
   AK24_TEST_ASSERT_NOT_NULL(list_form);
   AK24_TEST_ASSERT_EQ(list_form->kind, AK_FORM_LIST);
-  AK24_TEST_ASSERT_EQ(list_form->data.list_form.element_type, element);
+  AK24_TEST_ASSERT_NEQ(list_form->data.list_form.element_type, element);
+  AK24_TEST_ASSERT_EQ(list_form->data.list_form.element_type->kind,
+                      AK_FORM_PRIMITIVE);
+  AK24_TEST_ASSERT_EQ(list_form->data.list_form.element_type->data.primitive,
+                      AK24_ATOM_I32);
 
   ak_form_free(list_form);
+  ak_form_free(element);
   AK24_TEST_PASS();
 }
 
@@ -102,9 +116,14 @@ static int test_map_form_creation(void) {
   AK24_TEST_ASSERT_NOT_NULL(map_form);
   AK24_TEST_ASSERT_EQ(map_form->kind, AK_FORM_MAP);
   AK24_TEST_ASSERT_EQ(map_form->data.map_form.key_type, AK24_ATOM_U32);
-  AK24_TEST_ASSERT_EQ(map_form->data.map_form.value_type, value_type);
+  AK24_TEST_ASSERT_NEQ(map_form->data.map_form.value_type, value_type);
+  AK24_TEST_ASSERT_EQ(map_form->data.map_form.value_type->kind,
+                      AK_FORM_PRIMITIVE);
+  AK24_TEST_ASSERT_EQ(map_form->data.map_form.value_type->data.primitive,
+                      AK24_ATOM_I32);
 
   ak_form_free(map_form);
+  ak_form_free(value_type);
   AK24_TEST_PASS();
 }
 
@@ -115,9 +134,13 @@ static int test_named_form_creation(void) {
   AK24_TEST_ASSERT_NOT_NULL(named);
   AK24_TEST_ASSERT_EQ(named->kind, AK_FORM_NAMED);
   AK24_TEST_ASSERT_STR_EQ(named->name, "my_type");
-  AK24_TEST_ASSERT_EQ(named->data.named.actual_form, inner);
+  AK24_TEST_ASSERT_NEQ(named->data.named.actual_form, inner);
+  AK24_TEST_ASSERT_EQ(named->data.named.actual_form->kind, AK_FORM_PRIMITIVE);
+  AK24_TEST_ASSERT_EQ(named->data.named.actual_form->data.primitive,
+                      AK24_ATOM_I32);
 
   ak_form_free(named);
+  ak_form_free(inner);
   AK24_TEST_PASS();
 }
 
@@ -260,6 +283,7 @@ static int test_optional_affordances(void) {
   AK24_TEST_ASSERT_EQ(ak_form_has_affordance(optional, "invalid"), 0);
 
   ak_form_free(optional);
+  ak_form_free(inner);
   AK24_TEST_PASS();
 }
 
@@ -274,6 +298,7 @@ static int test_repeatable_affordances(void) {
   AK24_TEST_ASSERT_EQ(ak_form_has_affordance(repeatable, "iterate"), 1);
 
   ak_form_free(repeatable);
+  ak_form_free(inner);
   AK24_TEST_PASS();
 }
 
@@ -286,6 +311,7 @@ static int test_list_affordances(void) {
   AK24_TEST_ASSERT_EQ(ak_form_has_affordance(list_form, "length"), 1);
 
   ak_form_free(list_form);
+  ak_form_free(element);
   AK24_TEST_PASS();
 }
 
@@ -299,6 +325,7 @@ static int test_map_affordances(void) {
   AK24_TEST_ASSERT_EQ(ak_form_has_affordance(map_form, "iterate"), 1);
 
   ak_form_free(map_form);
+  ak_form_free(value_type);
   AK24_TEST_PASS();
 }
 
@@ -318,6 +345,7 @@ static int test_struct_field_affordances(void) {
 
   list_deinit(&fields);
   ak_form_free(struct_form);
+  ak_form_free(pattern);
   AK24_TEST_PASS();
 }
 
@@ -330,6 +358,7 @@ static int test_get_affordances_list(void) {
 
   list_deinit(&affordances);
   ak_form_free(optional);
+  ak_form_free(inner);
   AK24_TEST_PASS();
 }
 
@@ -447,6 +476,7 @@ static int test_repeatable_form_with_real_affects(void) {
 
   list_deinit(&instance.values);
   ak_form_free(repeatable);
+  ak_form_free(i32_form);
   AK24_TEST_PASS();
 }
 
@@ -558,6 +588,7 @@ static int test_optional_form_with_real_affects(void) {
   AK24_TEST_ASSERT_NULL(result);
 
   ak_form_free(optional);
+  ak_form_free(i32_form);
   AK24_TEST_PASS();
 }
 
@@ -658,6 +689,9 @@ static int test_struct_form_with_field_affects(void) {
   list_deinit(&parts);
   list_deinit(&fields);
   ak_form_free(person_form);
+  ak_form_free(pattern);
+  ak_form_free(str_form);
+  ak_form_free(i32_form);
   AK24_TEST_PASS();
 }
 

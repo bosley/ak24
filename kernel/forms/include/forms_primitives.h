@@ -29,6 +29,25 @@ typedef struct {
   map_void_t items;
 } ak_map_instance_t;
 
+typedef struct {
+  ak_context_t *ctx;
+} root_form_ctx_t;
+
+root_form_ctx_t *ak_root_form_ctx_new(void);
+void ak_root_form_ctx_free(root_form_ctx_t *root);
+
+ak_form_t *ak_root_form_ctx_get_bool(root_form_ctx_t *root);
+ak_form_t *ak_root_form_ctx_get_u8(root_form_ctx_t *root);
+ak_form_t *ak_root_form_ctx_get_u16(root_form_ctx_t *root);
+ak_form_t *ak_root_form_ctx_get_u32(root_form_ctx_t *root);
+ak_form_t *ak_root_form_ctx_get_u64(root_form_ctx_t *root);
+ak_form_t *ak_root_form_ctx_get_i8(root_form_ctx_t *root);
+ak_form_t *ak_root_form_ctx_get_i16(root_form_ctx_t *root);
+ak_form_t *ak_root_form_ctx_get_i32(root_form_ctx_t *root);
+ak_form_t *ak_root_form_ctx_get_i64(root_form_ctx_t *root);
+ak_form_t *ak_root_form_ctx_get_f32(root_form_ctx_t *root);
+ak_form_t *ak_root_form_ctx_get_f64(root_form_ctx_t *root);
+
 ak_form_t *ak_primitive_bool(void);
 ak_form_t *ak_primitive_u8(void);
 ak_form_t *ak_primitive_u16(void);

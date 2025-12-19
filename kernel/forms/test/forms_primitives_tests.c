@@ -2,29 +2,33 @@
 #include "kernel.h"
 #include "test/assert.h"
 
-static int test_primitive_forms_singleton(void) {
+static int test_primitive_forms_not_singleton(void) {
   ak_form_t *i32_1 = ak_primitive_i32();
   ak_form_t *i32_2 = ak_primitive_i32();
 
-  AK24_TEST_ASSERT_EQ(i32_1, i32_2);
+  AK24_TEST_ASSERT_NEQ(i32_1, i32_2);
   AK24_TEST_ASSERT_EQ(i32_1->kind, AK_FORM_PRIMITIVE);
   AK24_TEST_ASSERT_EQ(i32_1->data.primitive, AK24_ATOM_I32);
+  AK24_TEST_ASSERT_EQ(i32_2->kind, AK_FORM_PRIMITIVE);
+  AK24_TEST_ASSERT_EQ(i32_2->data.primitive, AK24_ATOM_I32);
+
+  ak_form_free(i32_1);
+  ak_form_free(i32_2);
 
   AK24_TEST_PASS();
 }
 
 static int test_all_primitive_forms(void) {
-  AK24_TEST_ASSERT_NOT_NULL(ak_primitive_bool());
-  AK24_TEST_ASSERT_NOT_NULL(ak_primitive_u8());
-  AK24_TEST_ASSERT_NOT_NULL(ak_primitive_u16());
-  AK24_TEST_ASSERT_NOT_NULL(ak_primitive_u32());
-  AK24_TEST_ASSERT_NOT_NULL(ak_primitive_u64());
-  AK24_TEST_ASSERT_NOT_NULL(ak_primitive_i8());
-  AK24_TEST_ASSERT_NOT_NULL(ak_primitive_i16());
-  AK24_TEST_ASSERT_NOT_NULL(ak_primitive_i32());
-  AK24_TEST_ASSERT_NOT_NULL(ak_primitive_i64());
-  AK24_TEST_ASSERT_NOT_NULL(ak_primitive_f32());
-  AK24_TEST_ASSERT_NOT_NULL(ak_primitive_f64());
+  ak_form_t *forms[] = {
+      ak_primitive_bool(), ak_primitive_u8(),  ak_primitive_u16(),
+      ak_primitive_u32(),  ak_primitive_u64(), ak_primitive_i8(),
+      ak_primitive_i16(),  ak_primitive_i32(), ak_primitive_i64(),
+      ak_primitive_f32(),  ak_primitive_f64()};
+
+  for (int i = 0; i < 11; i++) {
+    AK24_TEST_ASSERT_NOT_NULL(forms[i]);
+    ak_form_free(forms[i]);
+  }
 
   AK24_TEST_PASS();
 }
@@ -220,11 +224,53 @@ static int test_map_with_builtin_affects(void) {
   AK24_TEST_PASS();
 }
 
+static int test_root_form_ctx_factory(void) {
+  root_form_ctx_t *root = ak_root_form_ctx_new();
+  AK24_TEST_ASSERT_NOT_NULL(root);
+  AK24_TEST_ASSERT_NOT_NULL(root->ctx);
+
+  ak_form_t *i32_1 = ak_root_form_ctx_get_i32(root);
+  AK24_TEST_ASSERT_NOT_NULL(i32_1);
+  AK24_TEST_ASSERT_EQ(i32_1->kind, AK_FORM_PRIMITIVE);
+  AK24_TEST_ASSERT_EQ(i32_1->data.primitive, AK24_ATOM_I32);
+
+  ak_form_t *i32_2 = ak_root_form_ctx_get_i32(root);
+  AK24_TEST_ASSERT_EQ(i32_1, i32_2);
+
+  ak_form_t *u32 = ak_root_form_ctx_get_u32(root);
+  AK24_TEST_ASSERT_NOT_NULL(u32);
+  AK24_TEST_ASSERT_NEQ(i32_1, u32);
+
+  ak_root_form_ctx_free(root);
+  AK24_TEST_PASS();
+}
+
+static int test_context_stores_forms(void) {
+  ak_context_t *ctx = ak_context_new();
+  AK24_TEST_ASSERT_NOT_NULL(ctx);
+
+  ak_form_t *i32 = ak_form_new_primitive(AK24_ATOM_I32);
+  AK24_TEST_ASSERT_NOT_NULL(i32);
+
+  int result = ak_form_register(ctx, "my_i32", i32);
+  AK24_TEST_ASSERT_EQ(result, 0);
+
+  ak_form_t *retrieved = ak_form_lookup(ctx, "my_i32");
+  AK24_TEST_ASSERT_EQ(retrieved, i32);
+
+  ak_context_free(ctx);
+  ak_form_free(i32);
+
+  AK24_TEST_PASS();
+}
+
 int main(void) {
   ak_kernel_init();
 
-  AK24_TEST_RUN(test_primitive_forms_singleton);
+  AK24_TEST_RUN(test_primitive_forms_not_singleton);
   AK24_TEST_RUN(test_all_primitive_forms);
+  AK24_TEST_RUN(test_root_form_ctx_factory);
+  AK24_TEST_RUN(test_context_stores_forms);
   AK24_TEST_RUN(test_optional_with_builtin_affects);
   AK24_TEST_RUN(test_repeatable_with_builtin_affects);
   AK24_TEST_RUN(test_list_with_builtin_affects);

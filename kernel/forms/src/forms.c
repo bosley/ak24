@@ -2,6 +2,93 @@
 #include "kernel.h"
 #include <string.h>
 
+static ak_form_t *ak_form_clone(ak_form_t *form);
+
+static ak_form_t *ak_form_clone(ak_form_t *form) {
+  if (!form) {
+    return NULL;
+  }
+
+  ak_form_t *clone = AK24_ALLOC(sizeof(ak_form_t));
+  if (!clone) {
+    return NULL;
+  }
+
+  memset(clone, 0, sizeof(ak_form_t));
+  clone->kind = form->kind;
+
+  if (form->name) {
+    clone->name = AK24_ALLOC(strlen(form->name) + 1);
+    if (clone->name) {
+      strcpy(clone->name, form->name);
+    }
+  }
+
+  switch (form->kind) {
+  case AK_FORM_PRIMITIVE:
+    clone->data.primitive = form->data.primitive;
+    break;
+
+  case AK_FORM_COMPOUND: {
+    list_init(&clone->data.compound_parts);
+    list_iter_t iter = list_iter(&form->data.compound_parts);
+    ak_form_t **part;
+    while (
+        (part = (ak_form_t **)list_next(&form->data.compound_parts, &iter))) {
+      ak_form_t *part_clone = ak_form_clone(*part);
+      if (part_clone) {
+        list_push(&clone->data.compound_parts, part_clone);
+      }
+    }
+    break;
+  }
+
+  case AK_FORM_OPTIONAL:
+    clone->data.optional.inner = ak_form_clone(form->data.optional.inner);
+    break;
+
+  case AK_FORM_REPEATABLE:
+    clone->data.repeatable.inner = ak_form_clone(form->data.repeatable.inner);
+    break;
+
+  case AK_FORM_STRUCT: {
+    clone->data.struct_form.pattern =
+        ak_form_clone(form->data.struct_form.pattern);
+    list_init(&clone->data.struct_form.field_names);
+    list_iter_t iter = list_iter(&form->data.struct_form.field_names);
+    char **field;
+    while ((field = list_next(&form->data.struct_form.field_names, &iter))) {
+      list_push(&clone->data.struct_form.field_names, *field);
+    }
+    break;
+  }
+
+  case AK_FORM_LIST:
+    clone->data.list_form.element_type =
+        ak_form_clone(form->data.list_form.element_type);
+    break;
+
+  case AK_FORM_MAP:
+    clone->data.map_form.key_type = form->data.map_form.key_type;
+    clone->data.map_form.value_type =
+        ak_form_clone(form->data.map_form.value_type);
+    break;
+
+  case AK_FORM_NAMED:
+    clone->data.named.actual_form = ak_form_clone(form->data.named.actual_form);
+    break;
+  }
+
+  list_init(&clone->affects);
+  list_iter_t affect_iter = list_iter(&form->affects);
+  ak_affect_t **affect;
+  while ((affect = (ak_affect_t **)list_next(&form->affects, &affect_iter))) {
+    list_push(&clone->affects, *affect);
+  }
+
+  return clone;
+}
+
 ak_form_t *ak_form_new_primitive(ak_atom_type_e type) {
   ak_form_t *form = AK24_ALLOC(sizeof(ak_form_t));
   if (!form) {
@@ -34,7 +121,10 @@ ak_form_t *ak_form_new_compound(list_void_t *parts) {
   list_iter_t iter = list_iter(parts);
   ak_form_t **part;
   while ((part = (ak_form_t **)list_next(parts, &iter))) {
-    list_push(&form->data.compound_parts, *part);
+    ak_form_t *part_clone = ak_form_clone(*part);
+    if (part_clone) {
+      list_push(&form->data.compound_parts, part_clone);
+    }
   }
 
   return form;
@@ -52,8 +142,13 @@ ak_form_t *ak_form_new_optional(ak_form_t *inner) {
 
   memset(form, 0, sizeof(ak_form_t));
   form->kind = AK_FORM_OPTIONAL;
-  form->data.optional.inner = inner;
+  form->data.optional.inner = ak_form_clone(inner);
   list_init(&form->affects);
+
+  if (!form->data.optional.inner) {
+    AK24_FREE(form);
+    return NULL;
+  }
 
   return form;
 }
@@ -70,8 +165,13 @@ ak_form_t *ak_form_new_repeatable(ak_form_t *inner) {
 
   memset(form, 0, sizeof(ak_form_t));
   form->kind = AK_FORM_REPEATABLE;
-  form->data.repeatable.inner = inner;
+  form->data.repeatable.inner = ak_form_clone(inner);
   list_init(&form->affects);
+
+  if (!form->data.repeatable.inner) {
+    AK24_FREE(form);
+    return NULL;
+  }
 
   return form;
 }
@@ -88,9 +188,14 @@ ak_form_t *ak_form_new_struct(ak_form_t *pattern, list_str_t *field_names) {
 
   memset(form, 0, sizeof(ak_form_t));
   form->kind = AK_FORM_STRUCT;
-  form->data.struct_form.pattern = pattern;
+  form->data.struct_form.pattern = ak_form_clone(pattern);
   list_init(&form->data.struct_form.field_names);
   list_init(&form->affects);
+
+  if (!form->data.struct_form.pattern) {
+    AK24_FREE(form);
+    return NULL;
+  }
 
   list_iter_t iter = list_iter(field_names);
   char **field;
@@ -113,8 +218,13 @@ ak_form_t *ak_form_new_list(ak_form_t *element_type) {
 
   memset(form, 0, sizeof(ak_form_t));
   form->kind = AK_FORM_LIST;
-  form->data.list_form.element_type = element_type;
+  form->data.list_form.element_type = ak_form_clone(element_type);
   list_init(&form->affects);
+
+  if (!form->data.list_form.element_type) {
+    AK24_FREE(form);
+    return NULL;
+  }
 
   return form;
 }
@@ -132,8 +242,13 @@ ak_form_t *ak_form_new_map(ak_atom_type_e key_type, ak_form_t *value_type) {
   memset(form, 0, sizeof(ak_form_t));
   form->kind = AK_FORM_MAP;
   form->data.map_form.key_type = key_type;
-  form->data.map_form.value_type = value_type;
+  form->data.map_form.value_type = ak_form_clone(value_type);
   list_init(&form->affects);
+
+  if (!form->data.map_form.value_type) {
+    AK24_FREE(form);
+    return NULL;
+  }
 
   return form;
 }
@@ -156,8 +271,14 @@ ak_form_t *ak_form_new_named(const char *name, ak_form_t *form) {
     return NULL;
   }
   strcpy(named_form->name, name);
-  named_form->data.named.actual_form = form;
+  named_form->data.named.actual_form = ak_form_clone(form);
   list_init(&named_form->affects);
+
+  if (!named_form->data.named.actual_form) {
+    AK24_FREE(named_form->name);
+    AK24_FREE(named_form);
+    return NULL;
+  }
 
   return named_form;
 }

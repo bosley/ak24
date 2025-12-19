@@ -2,83 +2,150 @@
 #include "kernel.h"
 #include <string.h>
 
-static ak_form_t *primitives[11] = {NULL};
+root_form_ctx_t *ak_root_form_ctx_new(void) {
+  root_form_ctx_t *root = AK24_ALLOC(sizeof(root_form_ctx_t));
+  if (!root) {
+    return NULL;
+  }
+
+  root->ctx = ak_context_new();
+  if (!root->ctx) {
+    AK24_FREE(root);
+    return NULL;
+  }
+
+  return root;
+}
+
+void ak_root_form_ctx_free(root_form_ctx_t *root) {
+  if (!root) {
+    return;
+  }
+
+  if (root->ctx) {
+    map_iter_t iter = map_iter();
+    void *key_value_pair;
+    while ((key_value_pair = map_next_generic(&root->ctx->data, &iter))) {
+      const char **key_ptr = (const char **)key_value_pair;
+      void **value_ptr = map_get_generic(&root->ctx->data, key_ptr);
+      if (value_ptr) {
+        ak_form_t *form = (ak_form_t *)*value_ptr;
+        ak_form_free(form);
+      }
+    }
+    ak_context_free(root->ctx);
+  }
+
+  AK24_FREE(root);
+}
+
+static ak_form_t *root_form_ctx_get_or_create(root_form_ctx_t *root,
+                                              const char *name,
+                                              ak_atom_type_e type) {
+  if (!root || !root->ctx) {
+    return NULL;
+  }
+
+  ak_form_t *form = ak_form_lookup_local(root->ctx, name);
+  if (form) {
+    return form;
+  }
+
+  form = ak_form_new_primitive(type);
+  if (!form) {
+    return NULL;
+  }
+
+  if (ak_form_register(root->ctx, name, form) != 0) {
+    ak_form_free(form);
+    return NULL;
+  }
+
+  return form;
+}
+
+ak_form_t *ak_root_form_ctx_get_bool(root_form_ctx_t *root) {
+  return root_form_ctx_get_or_create(root, "bool", AK24_ATOM_U8);
+}
+
+ak_form_t *ak_root_form_ctx_get_u8(root_form_ctx_t *root) {
+  return root_form_ctx_get_or_create(root, "u8", AK24_ATOM_U8);
+}
+
+ak_form_t *ak_root_form_ctx_get_u16(root_form_ctx_t *root) {
+  return root_form_ctx_get_or_create(root, "u16", AK24_ATOM_U16);
+}
+
+ak_form_t *ak_root_form_ctx_get_u32(root_form_ctx_t *root) {
+  return root_form_ctx_get_or_create(root, "u32", AK24_ATOM_U32);
+}
+
+ak_form_t *ak_root_form_ctx_get_u64(root_form_ctx_t *root) {
+  return root_form_ctx_get_or_create(root, "u64", AK24_ATOM_U64);
+}
+
+ak_form_t *ak_root_form_ctx_get_i8(root_form_ctx_t *root) {
+  return root_form_ctx_get_or_create(root, "i8", AK24_ATOM_I8);
+}
+
+ak_form_t *ak_root_form_ctx_get_i16(root_form_ctx_t *root) {
+  return root_form_ctx_get_or_create(root, "i16", AK24_ATOM_I16);
+}
+
+ak_form_t *ak_root_form_ctx_get_i32(root_form_ctx_t *root) {
+  return root_form_ctx_get_or_create(root, "i32", AK24_ATOM_I32);
+}
+
+ak_form_t *ak_root_form_ctx_get_i64(root_form_ctx_t *root) {
+  return root_form_ctx_get_or_create(root, "i64", AK24_ATOM_I64);
+}
+
+ak_form_t *ak_root_form_ctx_get_f32(root_form_ctx_t *root) {
+  return root_form_ctx_get_or_create(root, "f32", AK24_ATOM_F32);
+}
+
+ak_form_t *ak_root_form_ctx_get_f64(root_form_ctx_t *root) {
+  return root_form_ctx_get_or_create(root, "f64", AK24_ATOM_F64);
+}
 
 ak_form_t *ak_primitive_bool(void) {
-  if (!primitives[0]) {
-    primitives[0] = ak_form_new_primitive(AK24_ATOM_U8);
-  }
-  return primitives[0];
+  return ak_form_new_primitive(AK24_ATOM_U8);
 }
 
-ak_form_t *ak_primitive_u8(void) {
-  if (!primitives[1]) {
-    primitives[1] = ak_form_new_primitive(AK24_ATOM_U8);
-  }
-  return primitives[1];
-}
+ak_form_t *ak_primitive_u8(void) { return ak_form_new_primitive(AK24_ATOM_U8); }
 
 ak_form_t *ak_primitive_u16(void) {
-  if (!primitives[2]) {
-    primitives[2] = ak_form_new_primitive(AK24_ATOM_U16);
-  }
-  return primitives[2];
+  return ak_form_new_primitive(AK24_ATOM_U16);
 }
 
 ak_form_t *ak_primitive_u32(void) {
-  if (!primitives[3]) {
-    primitives[3] = ak_form_new_primitive(AK24_ATOM_U32);
-  }
-  return primitives[3];
+  return ak_form_new_primitive(AK24_ATOM_U32);
 }
 
 ak_form_t *ak_primitive_u64(void) {
-  if (!primitives[4]) {
-    primitives[4] = ak_form_new_primitive(AK24_ATOM_U64);
-  }
-  return primitives[4];
+  return ak_form_new_primitive(AK24_ATOM_U64);
 }
 
-ak_form_t *ak_primitive_i8(void) {
-  if (!primitives[5]) {
-    primitives[5] = ak_form_new_primitive(AK24_ATOM_I8);
-  }
-  return primitives[5];
-}
+ak_form_t *ak_primitive_i8(void) { return ak_form_new_primitive(AK24_ATOM_I8); }
 
 ak_form_t *ak_primitive_i16(void) {
-  if (!primitives[6]) {
-    primitives[6] = ak_form_new_primitive(AK24_ATOM_I16);
-  }
-  return primitives[6];
+  return ak_form_new_primitive(AK24_ATOM_I16);
 }
 
 ak_form_t *ak_primitive_i32(void) {
-  if (!primitives[7]) {
-    primitives[7] = ak_form_new_primitive(AK24_ATOM_I32);
-  }
-  return primitives[7];
+  return ak_form_new_primitive(AK24_ATOM_I32);
 }
 
 ak_form_t *ak_primitive_i64(void) {
-  if (!primitives[8]) {
-    primitives[8] = ak_form_new_primitive(AK24_ATOM_I64);
-  }
-  return primitives[8];
+  return ak_form_new_primitive(AK24_ATOM_I64);
 }
 
 ak_form_t *ak_primitive_f32(void) {
-  if (!primitives[9]) {
-    primitives[9] = ak_form_new_primitive(AK24_ATOM_F32);
-  }
-  return primitives[9];
+  return ak_form_new_primitive(AK24_ATOM_F32);
 }
 
 ak_form_t *ak_primitive_f64(void) {
-  if (!primitives[10]) {
-    primitives[10] = ak_form_new_primitive(AK24_ATOM_F64);
-  }
-  return primitives[10];
+  return ak_form_new_primitive(AK24_ATOM_F64);
 }
 
 typedef struct {

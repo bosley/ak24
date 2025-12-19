@@ -25,6 +25,8 @@ typedef enum {
   AK24_LOG_LEVEL_FATAL
 } ak_log_level_t;
 
+typedef enum { AK24_LOG_PATH_FULL, AK24_LOG_PATH_ABBREV } ak_log_path_format_t;
+
 typedef struct {
   va_list ap;
   const char *fmt;
@@ -55,6 +57,8 @@ const char *ak_log_level_string(ak_log_level_t level);
 void ak_log_set_lock(ak_log_lock_fn_t fn, void *udata);
 void ak_log_set_level(ak_log_level_t level);
 void ak_log_set_quiet(bool enable);
+void ak_log_set_color(bool enable);
+void ak_log_set_path_format(ak_log_path_format_t format);
 int ak_log_add_callback(ak_log_fn_t fn, void *udata, ak_log_level_t level);
 int ak_log_add_fp(FILE *fp, ak_log_level_t level);
 

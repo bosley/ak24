@@ -22,8 +22,11 @@ APP_ON_SHUTDOWN(on_shutdown) {
 }
 
 APP_MAIN(app_main) {
+  ak_log_set_level(AK24_LOG_LEVEL_TRACE);
+  ak_log_set_color(true);
+  ak_log_set_path_format(AK24_LOG_PATH_ABBREV);
+
   printf("ak24 v1.0.0\n");
-  printf("Log level: %s\n", ak_log_level_string(ctx->log_level));
   printf("Arguments (%u):\n", list_count(&ctx->args));
 
   list_iter_t iter = list_iter(&ctx->args);
@@ -31,6 +34,12 @@ APP_MAIN(app_main) {
   while ((arg = list_next(&ctx->args, &iter))) {
     printf("  %s\n", *arg);
   }
+
+  AK24_LOG_TRACE("This is a trace message");
+  AK24_LOG_DEBUG("This is a debug message");
+  AK24_LOG_INFO("This is an info message");
+  AK24_LOG_WARN("This is a warning message");
+  AK24_LOG_ERROR("This is an error message");
 
   return 0;
 }

@@ -106,6 +106,44 @@
                 "reveal": "always",
                 "panel": "shared"
             }
+        },
+        {
+            "label": "Build Atom Cube Demo",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build",
+                "--target",
+                "atom_cube_demo"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Run Atom Cube Demo",
+            "type": "shell",
+            "command": "./build/bin/atom-cube-demo",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": [
+                "Build Atom Cube Demo"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
         }
     ]
 }

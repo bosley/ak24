@@ -5,6 +5,8 @@
 #include "atom.h"
 #include "buffer.h"
 #include "context.h"
+#include "forms.h"
+#include "forms_primitives.h"
 #include "lambda.h"
 #include "list.h"
 #include "log.h"

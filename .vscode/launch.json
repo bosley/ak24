@@ -28,6 +28,19 @@
             "preLaunchTask": "Build and Test"
         },
         {
+            "name": "Debug Atom Cube Demo",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/atom-cube-demo",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb",
+            "preLaunchTask": "Build Atom Cube Demo"
+        },
+        {
             "name": "Attach to Process",
             "type": "cppdbg",
             "request": "attach",

@@ -1,0 +1,28 @@
+CompileFlags:
+  Add:
+    - "-I/Users/bosley/workspace/yokel/kernel"
+    - "-I/Users/bosley/workspace/yokel/kernel/map/include"
+    - "-I/Users/bosley/workspace/yokel/kernel/buffer/include"
+    - "-I/Users/bosley/workspace/yokel/build/_deps/bdwgc-src/include"
+    - "-DYOKEL_GC_ENABLED=1"
+  CompilationDatabase: build
+
+Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: Strict
+  ClangTidy:
+    Add:
+      - readability-*
+      - bugprone-*
+      - performance-*
+    Remove:
+      - readability-magic-numbers
+      - readability-identifier-length
+
+InlayHints:
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes
+
+Hover:
+  ShowAKA: Yes

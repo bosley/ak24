@@ -1,0 +1,47 @@
+{
+    "files.associations": {
+        "*.h": "c",
+        "*.c": "c",
+        "kernel.h": "c",
+        "map.h": "c",
+        "buffer.h": "c",
+        "assert.h": "c"
+    },
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
+    "C_Cpp.errorSquiggles": "enabled",
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.enhancedColorization": "enabled",
+    "cmake.configureOnOpen": false,
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.configureSettings": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "AK24_GC_ENABLED": "ON"
+    },
+    "editor.formatOnSave": false,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "search.exclude": {
+        "**/build": true,
+        "**/.git": true
+    },
+    "files.exclude": {
+        "**/.git": true,
+        "**/.DS_Store": true
+    },
+    "C_Cpp.default.includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/kernel",
+        "${workspaceFolder}/kernel/map/include",
+        "${workspaceFolder}/kernel/buffer/include",
+        "${workspaceFolder}/pkg/*/include",
+        "${workspaceFolder}/build/_deps/bdwgc-src/include"
+    ],
+    "C_Cpp.default.defines": [
+        "AK24_GC_ENABLED=1"
+    ],
+    "C_Cpp.default.cStandard": "c11",
+    "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: LLVM, IndentWidth: 2, ColumnLimit: 80 }"
+}

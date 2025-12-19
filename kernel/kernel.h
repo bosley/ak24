@@ -2,6 +2,7 @@
 #define AK24_KERNEL_H
 
 #include "arbuff.h"
+#include "atom.h"
 #include "buffer.h"
 #include "context.h"
 #include "lambda.h"

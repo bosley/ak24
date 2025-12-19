@@ -80,6 +80,4 @@ int run_buffer_rotate_trim_copy_tests(void) {
   return 0;
 }
 
-int main(void) {
-  return run_buffer_rotate_trim_copy_tests();
-}
+int main(void) { return run_buffer_rotate_trim_copy_tests(); }

@@ -3,6 +3,7 @@ build/
 .cruft/
 compile_commands.json
 docs/api/
+.github/
 
 # Prerequisites
 *.d

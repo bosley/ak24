@@ -1,7 +1,6 @@
 #include "arbuff.h"
 #include "kernel.h"
 #include "test/assert.h"
-#include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
 

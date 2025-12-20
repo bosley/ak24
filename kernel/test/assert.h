@@ -1,12 +1,12 @@
 #ifndef AK24_TEST_ASSERT_H
 #define AK24_TEST_ASSERT_H
 
-#include <pthread.h>
+#include "kernel.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static pthread_mutex_t ak24_test_mutex = PTHREAD_MUTEX_INITIALIZER;
+static AK_MUTEX ak24_test_mutex = AK_MUTEX_INITIALIZER;
 
 #define AK24_TEST_ASSERT(expr)                                                 \
   do {                                                                         \
@@ -90,10 +90,10 @@ static pthread_mutex_t ak24_test_mutex = PTHREAD_MUTEX_INITIALIZER;
 #define AK24_TEST_ASSERT_ATOMIC(expr)                                          \
   do {                                                                         \
     if (!(expr)) {                                                             \
-      pthread_mutex_lock(&ak24_test_mutex);                                    \
+      AK_MUTEX_LOCK(&ak24_test_mutex);                                         \
       fprintf(stderr, "[FAIL] %s:%d: Assertion failed: %s\n", __FILE__,        \
               __LINE__, #expr);                                                \
-      pthread_mutex_unlock(&ak24_test_mutex);                                  \
+      AK_MUTEX_UNLOCK(&ak24_test_mutex);                                       \
       exit(1);                                                                 \
     }                                                                          \
   } while (0)
@@ -101,10 +101,10 @@ static pthread_mutex_t ak24_test_mutex = PTHREAD_MUTEX_INITIALIZER;
 #define AK24_TEST_ASSERT_EQ_ATOMIC(a, b)                                       \
   do {                                                                         \
     if ((a) != (b)) {                                                          \
-      pthread_mutex_lock(&ak24_test_mutex);                                    \
+      AK_MUTEX_LOCK(&ak24_test_mutex);                                         \
       fprintf(stderr, "[FAIL] %s:%d: Expected %s == %s\n", __FILE__, __LINE__, \
               #a, #b);                                                         \
-      pthread_mutex_unlock(&ak24_test_mutex);                                  \
+      AK_MUTEX_UNLOCK(&ak24_test_mutex);                                       \
       exit(1);                                                                 \
     }                                                                          \
   } while (0)

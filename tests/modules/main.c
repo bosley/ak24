@@ -9,7 +9,6 @@
  * - Using unload callbacks
  * - Module lifecycle management (load/use/unload)
  * - Function signature metadata for dynamic dispatch
- * - Clean shutdown with statistics
  */
 
 #include <application.h>
@@ -47,25 +46,22 @@ APP_ON_SHUTDOWN(on_shutdown) {
 }
 
 APP_MAIN(app_main) {
-  (void)ctx; // Suppress unused parameter warning
+  (void)ctx;
 
   AK24_LOG_INFO("=== AK24 Module System Integration Test ===");
 
-  // Get the current working directory to locate the module
   char cwd[1024];
   if (getcwd(cwd, sizeof(cwd)) == NULL) {
     AK24_LOG_ERROR("Failed to get current directory");
     return 1;
   }
 
-  // Construct module path
   char module_path[1536];
   snprintf(module_path, sizeof(module_path), "%s/build/libtest_module.dylib",
            cwd);
 
   AK24_LOG_INFO("Module path: %s", module_path);
 
-  // Get module system context
   AK24_LOG_INFO("Step 1: Getting module system context...");
   ak_module_ctx_t *mod_ctx = ak_module_get_system_ctx();
   if (!mod_ctx) {
@@ -84,13 +80,11 @@ APP_MAIN(app_main) {
     return 1;
   }
 
-  // Load module options
   ak_module_load_options_t load_opts = {.module_path = module_path,
                                         .unload_callback = unload_lambda,
                                         .unload_callback_ctx = NULL,
                                         .thread_safe = false};
 
-  // Load the module
   AK24_LOG_INFO("Step 2: Loading module...");
   AK24_LOG_DEBUG("Calling load_module with path: %s", module_path);
   const char *error = NULL;
@@ -104,67 +98,54 @@ APP_MAIN(app_main) {
   }
   AK24_LOG_INFO("✓ Module loaded successfully");
 
-  // Get module info
   AK24_LOG_INFO("Step 3: Querying module info...");
-  const char *name = module->vtable.ak_module_info("name");
-  const char *version = module->vtable.ak_module_info("version");
-  const char *description = module->vtable.ak_module_info("description");
+  const char *name = ak_handle_get_info(module, "name");
+  const char *version = ak_handle_get_info(module, "version");
+  const char *description = ak_handle_get_info(module, "description");
   AK24_LOG_INFO("  Name: %s", name ? name : "N/A");
   AK24_LOG_INFO("  Version: %s", version ? version : "N/A");
   AK24_LOG_INFO("  Description: %s", description ? description : "N/A");
 
-  // Get and call module functions
   AK24_LOG_INFO("Step 4: Calling module functions...");
 
-  // Get process function
   typedef void (*module_fn_t)(void *);
-  module_fn_t process_fn = (module_fn_t)module->vtable.ak_module_get_function(
-      module->module_ctx, "process");
+  module_fn_t process_fn =
+      (module_fn_t)ak_handle_get_function(module, "process");
   if (process_fn) {
     AK24_LOG_INFO("Calling process()...");
     process_fn(NULL);
   }
 
-  // Get and call allocate function
-  module_fn_t allocate_fn = (module_fn_t)module->vtable.ak_module_get_function(
-      module->module_ctx, "allocate");
+  module_fn_t allocate_fn =
+      (module_fn_t)ak_handle_get_function(module, "allocate");
   if (allocate_fn) {
     AK24_LOG_INFO("Calling allocate() to test allocator...");
     allocate_fn(NULL);
   }
 
-  // Get and call sleep function
-  module_fn_t sleep_fn = (module_fn_t)module->vtable.ak_module_get_function(
-      module->module_ctx, "sleep");
+  module_fn_t sleep_fn = (module_fn_t)ak_handle_get_function(module, "sleep");
   if (sleep_fn) {
     AK24_LOG_INFO("Calling sleep(500ms)...");
     int sleep_ms = 500;
     sleep_fn(&sleep_ms);
   }
 
-  // Test function signature retrieval
   AK24_LOG_INFO("Step 5: Testing function signature metadata...");
-  if (module->vtable.ak_module_get_function_signature) {
-    ak_function_signature_t *sig =
-        module->vtable.ak_module_get_function_signature(module->module_ctx,
-                                                        "process");
-    if (sig) {
-      AK24_LOG_INFO("  Function: %s", sig->function_name);
-      AK24_LOG_INFO("  Parameters: %zu", sig->param_count);
-      AK24_LOG_INFO("  Return type: %d (ptr_depth: %zu)",
-                    sig->return_type.base_type, sig->return_type.ptr_depth);
-      for (size_t i = 0; i < sig->param_count; i++) {
-        AK24_LOG_INFO("    Param %zu: type=%d ptr_depth=%zu", i,
-                      sig->params[i].base_type, sig->params[i].ptr_depth);
-      }
-    } else {
-      AK24_LOG_WARN("Function signature not available for 'process'");
+  ak_function_signature_t *sig =
+      ak_handle_get_function_signature(module, "process");
+  if (sig) {
+    AK24_LOG_INFO("  Function: %s", sig->function_name);
+    AK24_LOG_INFO("  Parameters: %zu", sig->param_count);
+    AK24_LOG_INFO("  Return type: %d (ptr_depth: %zu)",
+                  sig->return_type.base_type, sig->return_type.ptr_depth);
+    for (size_t i = 0; i < sig->param_count; i++) {
+      AK24_LOG_INFO("    Param %zu: type=%d ptr_depth=%zu", i,
+                    sig->params[i].base_type, sig->params[i].ptr_depth);
     }
   } else {
-    AK24_LOG_WARN("Module does not support function signature metadata");
+    AK24_LOG_WARN("Function signature not available for 'process'");
   }
 
-  // Unload the module
   AK24_LOG_INFO("Step 6: Unloading module...");
   if (!mod_ctx->unload_module(module, &error)) {
     AK24_LOG_ERROR("Failed to unload module: %s",
@@ -175,7 +156,6 @@ APP_MAIN(app_main) {
   }
   AK24_LOG_INFO("✓ Module unloaded successfully");
 
-  // Cleanup
   ak_lambda_free(unload_lambda);
   ak_module_free_system_ctx(mod_ctx);
 

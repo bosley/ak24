@@ -500,6 +500,7 @@ static ak_module_handle_t *load_module_impl(ak_module_load_options_t *options,
   handle->unload_cb_ctx = instance->unload_callback_ctx;
   handle->thread_safe = instance->thread_safe;
   handle->lock = instance->access_mutex;
+  handle->internal_instance = instance;
 
   return handle;
 }
@@ -618,4 +619,112 @@ void ak_module_free_system_ctx(ak_module_ctx_t *ctx) {
   // Note: We don't destroy the manager here as it's a singleton
   // It will be cleaned up at program exit or explicit shutdown
   AK24_FREE(ctx);
+}
+
+/**
+ * @brief Get module information string (public API)
+ *
+ * Thread-safe with state checking. Does not require ref counting since
+ * it's a simple metadata query that doesn't involve executing module code.
+ */
+const char *ak_handle_get_info(ak_module_handle_t *handle, const char *key) {
+  if (!handle || !key) {
+    return NULL;
+  }
+
+  module_instance_t *instance = (module_instance_t *)handle->internal_instance;
+  if (!instance) {
+    return NULL;
+  }
+
+  // Check module state - must be LOADED
+  int state = atomic_load_explicit((_Atomic int *)&instance->state,
+                                   memory_order_acquire);
+  if (state != MODULE_STATE_LOADED) {
+    return NULL;
+  }
+
+  return handle->vtable.ak_module_info(key);
+}
+
+/**
+ * @brief Get a function pointer from a module (public API)
+ *
+ * Thread-safe with state checking and ref counting. Increments ref count
+ * to prevent unloading while the function pointer is being retrieved.
+ */
+void *ak_handle_get_function(ak_module_handle_t *handle,
+                             const char *function_name) {
+  if (!handle || !function_name) {
+    return NULL;
+  }
+
+  module_instance_t *instance = (module_instance_t *)handle->internal_instance;
+  if (!instance) {
+    return NULL;
+  }
+
+  // Check module state - must be LOADED
+  int state = atomic_load_explicit((_Atomic int *)&instance->state,
+                                   memory_order_acquire);
+  if (state != MODULE_STATE_LOADED) {
+    return NULL;
+  }
+
+  if (!handle->vtable.ak_module_get_function) {
+    return NULL;
+  }
+
+  // Increment ref count to prevent unload during this operation
+  atomic_fetch_add_explicit(&instance->ref_count, 1, memory_order_acquire);
+
+  void *result =
+      handle->vtable.ak_module_get_function(handle->module_ctx, function_name);
+
+  // Decrement ref count
+  atomic_fetch_sub_explicit(&instance->ref_count, 1, memory_order_release);
+
+  return result;
+}
+
+/**
+ * @brief Get function signature metadata from a module (public API)
+ *
+ * Thread-safe with state checking and ref counting. Increments ref count
+ * to prevent unloading while the signature is being retrieved.
+ */
+ak_function_signature_t *
+ak_handle_get_function_signature(ak_module_handle_t *handle,
+                                 const char *function_name) {
+  if (!handle || !function_name) {
+    return NULL;
+  }
+
+  module_instance_t *instance = (module_instance_t *)handle->internal_instance;
+  if (!instance) {
+    return NULL;
+  }
+
+  // Check module state - must be LOADED
+  int state = atomic_load_explicit((_Atomic int *)&instance->state,
+                                   memory_order_acquire);
+  if (state != MODULE_STATE_LOADED) {
+    return NULL;
+  }
+
+  if (!handle->vtable.ak_module_get_function_signature) {
+    return NULL;
+  }
+
+  // Increment ref count to prevent unload during this operation
+  atomic_fetch_add_explicit(&instance->ref_count, 1, memory_order_acquire);
+
+  ak_function_signature_t *result =
+      handle->vtable.ak_module_get_function_signature(handle->module_ctx,
+                                                      function_name);
+
+  // Decrement ref count
+  atomic_fetch_sub_explicit(&instance->ref_count, 1, memory_order_release);
+
+  return result;
 }

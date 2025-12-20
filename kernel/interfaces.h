@@ -176,6 +176,7 @@ struct ak_module_handle_t {
   void *unload_cb_ctx;       /**< User callback context */
   bool thread_safe;          /**< Thread-safe access requested */
   void *lock;                /**< Lock if thread_safe is true */
+  void *internal_instance;   /**< Internal module instance (opaque) */
 };
 
 /**
@@ -190,5 +191,55 @@ typedef struct {
 
 /** Current AK24 module API version */
 #define AK24_MODULE_API_VERSION 1
+
+/**
+ * @brief Get module system context
+ *
+ * @return Module system context, or NULL on failure
+ */
+ak_module_ctx_t *ak_module_get_system_ctx(void);
+
+/**
+ * @brief Free module system context
+ *
+ * @param ctx Module system context to free
+ */
+void ak_module_free_system_ctx(ak_module_ctx_t *ctx);
+
+/**
+ * @brief Get module information string
+ *
+ * Convenience wrapper for module->vtable.ak_module_info(key)
+ *
+ * @param handle Module handle
+ * @param key Info key (e.g., "name", "version", "description")
+ * @return Info string, or NULL if not found
+ */
+const char *ak_handle_get_info(ak_module_handle_t *handle, const char *key);
+
+/**
+ * @brief Get a function pointer from a module
+ *
+ * Convenience wrapper for module->vtable.ak_module_get_function()
+ *
+ * @param handle Module handle
+ * @param function_name Name of function to retrieve
+ * @return Function pointer, or NULL if not found
+ */
+void *ak_handle_get_function(ak_module_handle_t *handle,
+                             const char *function_name);
+
+/**
+ * @brief Get function signature metadata from a module
+ *
+ * Convenience wrapper for module->vtable.ak_module_get_function_signature()
+ *
+ * @param handle Module handle
+ * @param function_name Name of function to query
+ * @return Function signature metadata, or NULL if not available
+ */
+ak_function_signature_t *
+ak_handle_get_function_signature(ak_module_handle_t *handle,
+                                 const char *function_name);
 
 #endif

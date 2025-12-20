@@ -1,4 +1,14 @@
 cmake_minimum_required(VERSION 3.20)
+
+# Set install prefix from AK24_HOME if available, before project()
+if(DEFINED ENV{AK24_HOME})
+    set(CMAKE_INSTALL_PREFIX "$ENV{AK24_HOME}" CACHE PATH "Install prefix from AK24_HOME" FORCE)
+    message(STATUS "Installing to AK24_HOME: $ENV{AK24_HOME}")
+elseif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/.ak24" CACHE PATH "Default install prefix" FORCE)
+    message(STATUS "AK24_HOME not set, using default: ${CMAKE_INSTALL_PREFIX}")
+endif()
+
 project(ak24 VERSION 0.0.1 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
@@ -10,7 +20,7 @@ set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/.cache/fetchcontent" CACHE PATH "
 option(AK24_GC_ENABLED "Enable Boehm GC for memory management" ON)
 option(AK24_BUILD_DEBUG_MEMORY "Enable memory tracking and statistics" OFF)
 option(AK24_BUILD_SHARED_KERNEL "Build kernel as shared library" OFF)
-option(AK24_BUILD_DOCS "Build API documentation with Doxygen" OFF)
+option(AK24_BUILD_DOCS "Build API documentation with Doxygen" ON)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -50,13 +60,18 @@ if(AK24_BUILD_DOCS)
 
         configure_file(${DOXYGEN_IN} ${DOXYGEN_OUT} @ONLY)
 
-        add_custom_target(docs
+        add_custom_target(docs ALL
             COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_OUT}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             COMMENT "Generating API documentation with Doxygen"
             VERBATIM)
 
-        message(STATUS "Doxygen: ENABLED (run 'make docs' to generate)")
+        # Install documentation
+        install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/docs/api/html
+            DESTINATION share/doc/ak24
+            OPTIONAL)
+
+        message(STATUS "Doxygen: ENABLED (docs will be generated during build)")
     else()
         message(WARNING "Doxygen not found - documentation will not be built")
     endif()
@@ -66,4 +81,16 @@ add_subdirectory(kernel)
 
 add_subdirectory(examples/ak24-cli)
 add_subdirectory(examples/atom-cube-demo)
+
+# Add uninstall target
+if(NOT TARGET uninstall)
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+        IMMEDIATE @ONLY)
+
+    add_custom_target(uninstall
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake
+        COMMENT "Uninstalling AK24...")
+endif()
 

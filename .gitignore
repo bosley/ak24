@@ -4,6 +4,7 @@ build/
 compile_commands.json
 docs/api/
 .github/
+.DS_Store
 
 # Prerequisites
 *.d

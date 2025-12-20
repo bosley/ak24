@@ -1,4 +1,4 @@
-.PHONY: all clean configure build test install docs docs-clean
+.PHONY: all clean configure build test install uninstall docs docs-clean
 
 BUILD_DIR := build
 BUILD_TYPE ?= Release
@@ -31,4 +31,7 @@ clean:
 
 install: build
 	@cmake --install $(BUILD_DIR)
+
+uninstall:
+	@cd $(BUILD_DIR) && cmake --build . --target uninstall
 

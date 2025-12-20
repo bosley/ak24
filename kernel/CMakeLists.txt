@@ -11,6 +11,7 @@ if(AK24_GC_ENABLED)
     set(enable_cplusplus OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     set(disable_handle_fork ON CACHE BOOL "" FORCE)
+    set(install_headers OFF CACHE BOOL "" FORCE)
 
     FetchContent_MakeAvailable(bdwgc)
 
@@ -210,4 +211,44 @@ foreach(TEST_FILE ${ALL_COMPILE_TIME_TESTS})
         VERBATIM
     )
 endforeach()
+
+# Install garbage collector library
+if(AK24_GC_ENABLED AND TARGET gc)
+    install(TARGETS gc
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION bin
+        COMPONENT gc
+    )
+endif()
+
+# Install kernel library
+install(TARGETS ak24_kernel
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
+)
+
+# Install kernel headers
+install(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/application.h
+    DESTINATION include/ak24
+)
+
+install(DIRECTORY
+    ${CMAKE_CURRENT_SOURCE_DIR}/map/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/buffer/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/list/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/context/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/lambda/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/atoms/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/forms/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/log/include/
+    DESTINATION include/ak24
+    FILES_MATCHING PATTERN "*.h"
+)
+
 

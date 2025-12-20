@@ -63,7 +63,8 @@ static list_void_t shutdown_lambdas;
 static int shutdown_lambdas_initialized = 0;
 static time_t kernel_start_time;
 
-// Signal handling infrastructure
+// Signal handling infrastructure (POSIX only)
+#ifdef AK24_PLATFORM_POSIX
 typedef struct {
   int signum;
   ak_lambda_t *handler;
@@ -78,6 +79,11 @@ static AK_MUTEX signal_mutex = AK_MUTEX_INITIALIZER;
 static void ak_signal_handlers_init(void);
 static void ak_signal_handlers_deinit(void);
 static void ak_signal_dispatch(int signum);
+#else
+// Windows stubs - forward declarations
+static void ak_signal_handlers_init(void);
+static void ak_signal_handlers_deinit(void);
+#endif
 
 #if AK24_BUILD_DEBUG_MEMORY
 
@@ -340,7 +346,8 @@ list_str_t ak_args_to_list(int argc, char **argv) {
   return args;
 }
 
-// Signal handling implementation
+// Signal handling implementation (POSIX only)
+#ifdef AK24_PLATFORM_POSIX
 
 static void ak_signal_dispatch(int signum) {
   AK_MUTEX_LOCK(&signal_mutex);
@@ -368,6 +375,7 @@ static void ak_signal_dispatch(int signum) {
 }
 
 void ak_register_signal_handler(int signum, ak_lambda_t *handler) {
+#ifdef AK24_PLATFORM_POSIX
   if (!handler || !signal_handlers_initialized) {
     return;
   }
@@ -409,9 +417,15 @@ void ak_register_signal_handler(int signum, ak_lambda_t *handler) {
   }
 
   AK_MUTEX_UNLOCK(&signal_mutex);
+#else
+  // Windows does not support POSIX signals
+  (void)signum;
+  (void)handler;
+#endif
 }
 
 void ak_unregister_signal_handler(int signum) {
+#ifdef AK24_PLATFORM_POSIX
   AK_MUTEX_LOCK(&signal_mutex);
 
   if (!signal_handlers_initialized) {
@@ -440,8 +454,16 @@ void ak_unregister_signal_handler(int signum) {
   }
 
   AK_MUTEX_UNLOCK(&signal_mutex);
+#else
+  // Windows does not support POSIX signals
+  (void)signum;
+#endif
 }
 
+/*
+    Signal Handling Functions.
+*/
+#ifdef AK24_PLATFORM_POSIX
 static void ak_signal_handlers_init(void) {
   list_init(&signal_handlers);
   signal_handlers_initialized = 1;
@@ -469,6 +491,30 @@ static void ak_signal_handlers_deinit(void) {
 
   AK_MUTEX_UNLOCK(&signal_mutex);
 }
+#elif defined(AK24_PLATFORM_WINDOWS)
+
+static void ak_signal_handlers_init(void) {
+  // No-op on Windows
+}
+
+static void ak_signal_handlers_deinit(void) {
+  // No-op on Windows
+}
+
+#else // Other platforms
+
+#endif
+
+#else
+// Windows stubs for signal handling
+static void ak_signal_handlers_init(void) {
+  // No-op on Windows
+}
+
+static void ak_signal_handlers_deinit(void) {
+  // No-op on Windows
+}
+#endif // END SIGNAL HANDLING
 
 // Mutex implementations
 

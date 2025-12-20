@@ -46,10 +46,14 @@
  * and platform-specific types.
  */
 #if defined(_WIN32) || defined(_WIN64)
+#ifndef AK24_PLATFORM_WINDOWS
 #define AK24_PLATFORM_WINDOWS
+#endif
 #include "kernel_win.h"
 #elif defined(__unix__) || defined(__APPLE__) || defined(__linux__)
+#ifndef AK24_PLATFORM_POSIX
 #define AK24_PLATFORM_POSIX
+#endif
 #include "kernel_nix.h"
 #else
 #error "Unsupported platform - only POSIX and Windows are supported"
@@ -145,6 +149,12 @@ typedef struct kernel_shutdown_info_s {
 #endif
 
 /**
+ * @brief Mutex and condition variable functions
+ *
+ * Platform-agnostic synchronization primitives implemented in kernel.c
+ */
+
+/**
  * @brief Initialize a mutex at runtime
  *
  * @param mutex Mutex to initialize
@@ -237,69 +247,6 @@ int AK_cond_signal(AK_COND *cond);
  * @threadsafe
  */
 int AK_cond_broadcast(AK_COND *cond);
-
-#if AK24_GC_ENABLED
-
-/**
- * @def GC_THREADS
- * @brief Enable thread support in Boehm GC
- */
-#define GC_THREADS 1
-#include <gc.h>
-
-#if AK24_BUILD_DEBUG_MEMORY
-/**
- * @def AK24_ALLOC
- * @brief Allocate memory (GC with tracking)
- */
-#define AK24_ALLOC(size) ak_mem_alloc_tracked(size, __FILE__, __LINE__)
-
-/**
- * @def AK24_ALLOC_ATOMIC
- * @brief Allocate atomic memory (GC with tracking)
- */
-#define AK24_ALLOC_ATOMIC(size)                                                \
-  ak_mem_alloc_atomic_tracked(size, __FILE__, __LINE__)
-
-/**
- * @def AK24_REALLOC
- * @brief Reallocate memory (GC with tracking)
- */
-#define AK24_REALLOC(ptr, size)                                                \
-  ak_mem_realloc_tracked(ptr, size, __FILE__, __LINE__)
-
-/**
- * @def AK24_FREE
- * @brief Free memory (GC with tracking)
- */
-#define AK24_FREE(ptr) ak_mem_free_tracked(ptr, __FILE__, __LINE__)
-#else
-/**
- * @def AK24_ALLOC
- * @brief Allocate memory (GC)
- */
-#define AK24_ALLOC(size) GC_MALLOC(size)
-
-/**
- * @def AK24_ALLOC_ATOMIC
- * @brief Allocate atomic memory (GC)
- */
-#define AK24_ALLOC_ATOMIC(size) GC_MALLOC_ATOMIC(size)
-
-/**
- * @def AK24_REALLOC
- * @brief Reallocate memory (GC)
- */
-#define AK24_REALLOC(ptr, size) GC_REALLOC(ptr, size)
-
-/**
- * @def AK24_FREE
- * @brief Free memory (GC)
- */
-#define AK24_FREE(ptr) GC_FREE(ptr)
-#endif
-
-#endif // AK24_GC_ENABLED
 
 /**
  * @brief Threading functions

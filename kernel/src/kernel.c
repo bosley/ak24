@@ -1,7 +1,9 @@
 #include "kernel.h"
 #include "thread_platform.h"
 #include <signal.h>
-#include <stdarg.h>#include <stdint.h>#include <stdio.h>
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
 
 #if AK24_GC_ENABLED
 #include <sched.h>
@@ -39,8 +41,7 @@ static void ak_print_warning(const char *format, ...) {
   }
 
   // Set bright red color (FOREGROUND_INTENSITY makes it bright)
-  SetConsoleTextAttribute(hConsole,
-    FOREGROUND_RED | FOREGROUND_INTENSITY);
+  SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_INTENSITY);
 
   va_list args;
   va_start(args, format);
@@ -246,6 +247,9 @@ void ak_kernel_init(void) {
   ak_print_warning("AK24 Windows support is UNTESTED CODE\n");
   ak_print_warning("Please report any issues to the development team\n");
   ak_print_warning("***************\n\n");
+#else
+  // Silence unused function warning on non-Windows platforms
+  (void)ak_print_warning;
 #endif
   GC_set_warn_proc(GC_ignore_warn_proc);
   GC_INIT();
@@ -287,6 +291,9 @@ void ak_kernel_init(void) {
   ak_print_warning("AK24 Windows support is UNTESTED CODE\n");
   ak_print_warning("Please report any issues to the development team\n");
   ak_print_warning("***************\n\n");
+#else
+  // Silence unused function warning on non-Windows platforms
+  (void)ak_print_warning;
 #endif
   list_init(&shutdown_lambdas);
   shutdown_lambdas_initialized = 1;
@@ -637,11 +644,12 @@ int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
 #endif
 #elif defined(AK24_PLATFORM_WINDOWS)
   // Windows thread creation with adapter for POSIX-style functions
-  ak_print_warning("WARNING: Windows threading implementation is UNTESTED CODE\n");
+  ak_print_warning(
+      "WARNING: Windows threading implementation is UNTESTED CODE\n");
 
   // Allocate adapter structure to pass both function and arg
   ak_win_thread_adapter_t *adapter =
-    (ak_win_thread_adapter_t *)AK24_ALLOC(sizeof(ak_win_thread_adapter_t));
+      (ak_win_thread_adapter_t *)AK24_ALLOC(sizeof(ak_win_thread_adapter_t));
   if (!adapter) {
     return -1;
   }
@@ -651,14 +659,14 @@ int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
 
   // Create Windows thread
   DWORD thread_id;
-  thread->handle = CreateThread(
-    NULL,                           // Default security attributes
-    0,                              // Default stack size
-    ak_win_thread_wrapper,          // Thread function wrapper
-    adapter,                        // Parameter to thread function
-    0,                              // Default creation flags
-    &thread_id                      // Receive thread identifier
-  );
+  thread->handle =
+      CreateThread(NULL,                  // Default security attributes
+                   0,                     // Default stack size
+                   ak_win_thread_wrapper, // Thread function wrapper
+                   adapter,               // Parameter to thread function
+                   0,                     // Default creation flags
+                   &thread_id             // Receive thread identifier
+      );
 
   if (thread->handle == NULL) {
     AK24_FREE(adapter);

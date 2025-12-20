@@ -1,3 +1,22 @@
+/**
+ * @file interfaces.h
+ * @brief Module system interfaces and dynamic function dispatch
+ *
+ * Defines the standard AK24 module interface including:
+ * - Module vtable structure
+ * - Function signature metadata for dynamic dispatch
+ * - Module loading/unloading API
+ * - Module allocator interface
+ * - Parameter type enumeration for reflection
+ *
+ * All AK24 modules must implement the ak_module_vtable_t interface and
+ * use the provided allocator for persistent allocations to ensure proper
+ * integration with the kernel's memory management system.
+ *
+ * @note Modules MUST use the provided ak_module_allocator_t for all
+ * allocations that outlive the function call to prevent GC/dlclose conflicts
+ */
+
 #ifndef AK24_KERNEL_INTERFACES_H
 #define AK24_KERNEL_INTERFACES_H
 

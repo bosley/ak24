@@ -376,6 +376,43 @@ void ak_on_shutdown(ak_lambda_t *lambda);
  */
 list_str_t ak_args_to_list(int argc, char **argv);
 
+/**
+ * @brief Register a signal handler
+ *
+ * Registers a lambda to be invoked when a specific signal is received.
+ * The lambda receives a pointer to int containing the signal number as
+ * invoke_args.
+ *
+ * @param signum Signal number (SIGINT, SIGTERM, etc.)
+ * @param handler Lambda to invoke on signal
+ *
+ * @threadsafe
+ *
+ * @par Example:
+ * @code
+ * void handle_interrupt(void *ctx, void *args) {
+ *   int signum = *(int *)args;
+ *   printf("Caught signal %d\n", signum);
+ * }
+ *
+ * ak_lambda_t *handler = ak_lambda_new(handle_interrupt, NULL, NULL);
+ * ak_register_signal_handler(SIGINT, handler);
+ * @endcode
+ */
+void ak_register_signal_handler(int signum, ak_lambda_t *handler);
+
+/**
+ * @brief Unregister a signal handler
+ *
+ * Removes the handler for a specific signal and restores the previous
+ * signal handler.
+ *
+ * @param signum Signal number to unregister
+ *
+ * @threadsafe
+ */
+void ak_unregister_signal_handler(int signum);
+
 // ---- New need to doc
 
 /*

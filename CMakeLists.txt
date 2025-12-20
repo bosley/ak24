@@ -20,7 +20,7 @@ set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/.cache/fetchcontent" CACHE PATH "
 option(AK24_GC_ENABLED "Enable Boehm GC for memory management" ON)
 option(AK24_BUILD_DEBUG_MEMORY "Enable memory tracking and statistics" OFF)
 option(AK24_BUILD_SHARED_KERNEL "Build kernel as shared library" OFF)
-option(AK24_BUILD_DOCS "Build API documentation with Doxygen" ON)
+option(AK24_BUILD_DOCS "Build API documentation with Doxygen" OFF)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -82,6 +82,7 @@ add_subdirectory(kernel)
 add_subdirectory(examples/ak24-cli)
 add_subdirectory(examples/atom-cube-demo)
 add_subdirectory(examples/thread-pool-demo)
+add_subdirectory(examples/signals-example)
 
 # Add uninstall target
 if(NOT TARGET uninstall)

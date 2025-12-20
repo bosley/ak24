@@ -3,13 +3,15 @@
  * @brief Application framework with automatic kernel lifecycle management
  *
  * Provides macros for creating AK24 applications with automatic kernel
- * initialization, shutdown handling, and argument processing. The framework
- * handles boilerplate setup code and provides a clean application entry point.
+ * initialization, shutdown handling, signal handling, and argument processing.
+ * The framework handles boilerplate setup code and provides a clean application
+ * entry point.
  *
  * Key features:
  * - Automatic kernel init/deinit
  * - Command-line argument processing
  * - Shutdown callback registration
+ * - Signal handler registration
  * - Application context with runtime information
  * - Macro-based application definition
  *
@@ -17,7 +19,12 @@
  *
  * @par Example:
  * @code
+ * APP_ON_SIGNAL(handle_interrupt, SIGINT) {
+ *   printf("Caught Ctrl+C\n");
+ * }
+ *
  * APP_MAIN(my_app) {
+ *   AK24_REGISTER_SIGNAL_HANDLER(handle_interrupt);
  *   printf("Args: %u\n", list_count(&ctx->args));
  *   return 0;
  * }
@@ -34,6 +41,7 @@
 #define AK24_APPLICATION_H
 
 #include "kernel.h"
+#include <signal.h>
 #include <string.h>
 
 /**
@@ -88,6 +96,63 @@ typedef struct {
  * @endcode
  */
 #define APP_MAIN(name) int name(ak_app_context_t *ctx)
+
+/**
+ * @def APP_ON_SIGNAL
+ * @brief Define signal handler function
+ *
+ * Creates a function signature for a signal handler. The function receives
+ * the signal number. Use the global app context if needed.
+ *
+ * @param name Name of signal handler function
+ * @param signum Signal number to handle (SIGINT, SIGTERM, SIGUSR1, etc.)
+ *
+ * @par Example:
+ * @code
+ * APP_ON_SIGNAL(handle_sigint, SIGINT) {
+ *   printf("Caught SIGINT (Ctrl+C)\n");
+ * }
+ * @endcode
+ *
+ * @note Must be registered with AK24_REGISTER_SIGNAL_HANDLER() in APP_MAIN
+ */
+#define APP_ON_SIGNAL(name, signum)                                            \
+  static const int __ak_signal_##name = signum;                                \
+  static void name(void *captured, void *args);                                \
+  static void __ak_signal_wrapper_##name(void *captured, void *args) {         \
+    (void)captured;                                                            \
+    name(captured, args);                                                      \
+  }                                                                            \
+  static void name(void *captured, void *args)
+
+/**
+ * @def AK24_REGISTER_SIGNAL_HANDLER
+ * @brief Register a signal handler defined with APP_ON_SIGNAL
+ *
+ * Registers a signal handler in the application's main function. Must be
+ * called after APP_ON_SIGNAL macro is used to define the handler.
+ *
+ * @param handler_name Name of the signal handler function
+ *
+ * @par Example:
+ * @code
+ * APP_ON_SIGNAL(handle_interrupt, SIGINT) {
+ *   printf("Interrupted!\n");
+ * }
+ *
+ * APP_MAIN(my_app) {
+ *   AK24_REGISTER_SIGNAL_HANDLER(handle_interrupt);
+ *   // ... rest of application
+ * }
+ * @endcode
+ */
+#define AK24_REGISTER_SIGNAL_HANDLER(handler_name)                             \
+  do {                                                                         \
+    ak_lambda_t *__signal_lambda_##handler_name =                              \
+        ak_lambda_new(__ak_signal_wrapper_##handler_name, NULL, NULL);         \
+    ak_register_signal_handler(__ak_signal_##handler_name,                     \
+                               __signal_lambda_##handler_name);                \
+  } while (0)
 
 /**
  * @def AK24_APPLICATION

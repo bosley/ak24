@@ -1,5 +1,6 @@
 #include "kernel.h"
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 
 #if AK24_GC_ENABLED
@@ -10,6 +11,22 @@
 static list_void_t shutdown_lambdas;
 static int shutdown_lambdas_initialized = 0;
 static time_t kernel_start_time;
+
+// Signal handling infrastructure
+typedef struct {
+  int signum;
+  ak_lambda_t *handler;
+  struct sigaction old_action;
+} ak_signal_handler_entry_t;
+
+static list_void_t signal_handlers;
+static int signal_handlers_initialized = 0;
+static pthread_mutex_t signal_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// Forward declarations for signal handling
+static void ak_signal_handlers_init(void);
+static void ak_signal_handlers_deinit(void);
+static void ak_signal_dispatch(int signum);
 
 #if AK24_BUILD_DEBUG_MEMORY
 
@@ -178,6 +195,7 @@ void ak_kernel_init(void) {
   GC_INIT();
   list_init(&shutdown_lambdas);
   shutdown_lambdas_initialized = 1;
+  ak_signal_handlers_init();
 }
 
 void ak_kernel_deinit(void) {
@@ -199,6 +217,7 @@ void ak_kernel_deinit(void) {
     list_deinit(&shutdown_lambdas);
     shutdown_lambdas_initialized = 0;
   }
+  ak_signal_handlers_deinit();
   sched_yield();
   sched_yield();
 }
@@ -209,6 +228,7 @@ void ak_kernel_init(void) {
   kernel_start_time = time(NULL);
   list_init(&shutdown_lambdas);
   shutdown_lambdas_initialized = 1;
+  ak_signal_handlers_init();
 }
 
 void ak_kernel_deinit(void) {
@@ -230,6 +250,7 @@ void ak_kernel_deinit(void) {
     list_deinit(&shutdown_lambdas);
     shutdown_lambdas_initialized = 0;
   }
+  ak_signal_handlers_deinit();
 }
 
 #endif
@@ -248,4 +269,134 @@ list_str_t ak_args_to_list(int argc, char **argv) {
     list_push(&args, argv[i]);
   }
   return args;
+}
+
+// Signal handling implementation
+
+static void ak_signal_dispatch(int signum) {
+  pthread_mutex_lock(&signal_mutex);
+
+  if (!signal_handlers_initialized) {
+    pthread_mutex_unlock(&signal_mutex);
+    return;
+  }
+
+  list_iter_t iter = list_iter(&signal_handlers);
+  void **entry_ptr;
+  while ((entry_ptr = list_next(&signal_handlers, &iter))) {
+    ak_signal_handler_entry_t *entry = (ak_signal_handler_entry_t *)*entry_ptr;
+    if (entry && entry->signum == signum && entry->handler) {
+      // Create signal info structure to pass to handler
+      int *signum_ptr = AK24_ALLOC(sizeof(int));
+      if (signum_ptr) {
+        *signum_ptr = signum;
+        ak_lambda_invoke(entry->handler, signum_ptr);
+      }
+    }
+  }
+
+  pthread_mutex_unlock(&signal_mutex);
+}
+
+void ak_register_signal_handler(int signum, ak_lambda_t *handler) {
+  if (!handler || !signal_handlers_initialized) {
+    return;
+  }
+
+  pthread_mutex_lock(&signal_mutex);
+
+  // Check if handler already exists for this signal
+  list_iter_t iter = list_iter(&signal_handlers);
+  void **entry_ptr;
+  while ((entry_ptr = list_next(&signal_handlers, &iter))) {
+    ak_signal_handler_entry_t *entry = (ak_signal_handler_entry_t *)*entry_ptr;
+    if (entry && entry->signum == signum) {
+      // Update existing handler
+      entry->handler = handler;
+      pthread_mutex_unlock(&signal_mutex);
+      return;
+    }
+  }
+
+  // Create new handler entry
+  ak_signal_handler_entry_t *entry =
+      AK24_ALLOC(sizeof(ak_signal_handler_entry_t));
+  if (!entry) {
+    pthread_mutex_unlock(&signal_mutex);
+    return;
+  }
+
+  entry->signum = signum;
+  entry->handler = handler;
+
+  // Install signal handler
+  struct sigaction sa;
+  sa.sa_handler = ak_signal_dispatch;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART; // Restart interrupted system calls
+
+  if (sigaction(signum, &sa, &entry->old_action) == 0) {
+    list_push(&signal_handlers, entry);
+  }
+
+  pthread_mutex_unlock(&signal_mutex);
+}
+
+void ak_unregister_signal_handler(int signum) {
+  pthread_mutex_lock(&signal_mutex);
+
+  if (!signal_handlers_initialized) {
+    pthread_mutex_unlock(&signal_mutex);
+    return;
+  }
+
+  list_iter_t iter = list_iter(&signal_handlers);
+  void **entry_ptr;
+  size_t index = 0;
+  int found = 0;
+
+  while ((entry_ptr = list_next(&signal_handlers, &iter))) {
+    ak_signal_handler_entry_t *entry = (ak_signal_handler_entry_t *)*entry_ptr;
+    if (entry && entry->signum == signum) {
+      // Restore old signal handler
+      sigaction(signum, &entry->old_action, NULL);
+      found = 1;
+      break;
+    }
+    index++;
+  }
+
+  if (found) {
+    list_remove_(&signal_handlers, index);
+  }
+
+  pthread_mutex_unlock(&signal_mutex);
+}
+
+static void ak_signal_handlers_init(void) {
+  list_init(&signal_handlers);
+  signal_handlers_initialized = 1;
+}
+
+static void ak_signal_handlers_deinit(void) {
+  if (!signal_handlers_initialized) {
+    return;
+  }
+
+  pthread_mutex_lock(&signal_mutex);
+
+  // Restore all signal handlers
+  list_iter_t iter = list_iter(&signal_handlers);
+  void **entry_ptr;
+  while ((entry_ptr = list_next(&signal_handlers, &iter))) {
+    ak_signal_handler_entry_t *entry = (ak_signal_handler_entry_t *)*entry_ptr;
+    if (entry) {
+      sigaction(entry->signum, &entry->old_action, NULL);
+    }
+  }
+
+  list_deinit(&signal_handlers);
+  signal_handlers_initialized = 0;
+
+  pthread_mutex_unlock(&signal_mutex);
 }

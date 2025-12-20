@@ -1,7 +1,7 @@
 #include "kernel.h"
 #include "thread_platform.h"
 #include <signal.h>
-#include <stdio.h>
+#include <stdarg.h>#include <stdint.h>#include <stdio.h>
 
 #if AK24_GC_ENABLED
 #include <sched.h>
@@ -15,6 +15,48 @@
 #elif defined(AK24_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
+
+/**
+ * @brief Print warning message in bright red (Windows console)
+ *
+ * Prints a formatted warning message in bright red on Windows console.
+ * On non-Windows platforms, prints without color.
+ *
+ * @param format Printf-style format string
+ * @param ... Variable arguments for format string
+ */
+static void ak_print_warning(const char *format, ...) {
+#ifdef AK24_PLATFORM_WINDOWS
+  HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+  CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
+  WORD saved_attributes;
+
+  // Save current attributes
+  if (GetConsoleScreenBufferInfo(hConsole, &consoleInfo)) {
+    saved_attributes = consoleInfo.wAttributes;
+  } else {
+    saved_attributes = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+  }
+
+  // Set bright red color (FOREGROUND_INTENSITY makes it bright)
+  SetConsoleTextAttribute(hConsole,
+    FOREGROUND_RED | FOREGROUND_INTENSITY);
+
+  va_list args;
+  va_start(args, format);
+  vprintf(format, args);
+  va_end(args);
+
+  // Restore original attributes
+  SetConsoleTextAttribute(hConsole, saved_attributes);
+#else
+  // Non-Windows: just print without color
+  va_list args;
+  va_start(args, format);
+  vprintf(format, args);
+  va_end(args);
+#endif
+}
 
 static list_void_t shutdown_lambdas;
 static int shutdown_lambdas_initialized = 0;
@@ -199,6 +241,12 @@ void ak_mem_print_stats(void) {
 
 void ak_kernel_init(void) {
   kernel_start_time = time(NULL);
+#ifdef AK24_PLATFORM_WINDOWS
+  ak_print_warning("\n*** WARNING ***\n");
+  ak_print_warning("AK24 Windows support is UNTESTED CODE\n");
+  ak_print_warning("Please report any issues to the development team\n");
+  ak_print_warning("***************\n\n");
+#endif
   GC_set_warn_proc(GC_ignore_warn_proc);
   GC_INIT();
   list_init(&shutdown_lambdas);
@@ -234,6 +282,12 @@ void ak_kernel_deinit(void) {
 
 void ak_kernel_init(void) {
   kernel_start_time = time(NULL);
+#ifdef AK24_PLATFORM_WINDOWS
+  ak_print_warning("\n*** WARNING ***\n");
+  ak_print_warning("AK24 Windows support is UNTESTED CODE\n");
+  ak_print_warning("Please report any issues to the development team\n");
+  ak_print_warning("***************\n\n");
+#endif
   list_init(&shutdown_lambdas);
   shutdown_lambdas_initialized = 1;
   ak_signal_handlers_init();
@@ -543,6 +597,30 @@ int AK_cond_broadcast(AK_COND *cond) {
 // These provide platform-agnostic threading primitives that handle
 // both GC/non-GC builds and POSIX/Windows platforms
 
+// Thread wrapper structure for Windows to adapt POSIX-style thread functions
+#ifdef AK24_PLATFORM_WINDOWS
+typedef struct {
+  void *(*start_routine)(void *);
+  void *arg;
+} ak_win_thread_adapter_t;
+
+// Windows thread adapter that converts Windows thread API to POSIX style
+static DWORD WINAPI ak_win_thread_wrapper(LPVOID param) {
+  ak_win_thread_adapter_t *adapter = (ak_win_thread_adapter_t *)param;
+  void *(*start_routine)(void *) = adapter->start_routine;
+  void *arg = adapter->arg;
+
+  // Free the adapter structure
+  AK24_FREE(adapter);
+
+  // Call the actual thread function
+  void *result = start_routine(arg);
+
+  // Windows threads return DWORD, we cast the result
+  return (DWORD)(uintptr_t)result;
+}
+#endif
+
 int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
                      void *arg) {
   if (!thread || !start_routine) {
@@ -558,11 +636,36 @@ int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
   return pthread_create(&thread->handle, NULL, start_routine, arg);
 #endif
 #elif defined(AK24_PLATFORM_WINDOWS)
-  // TODO: Windows CreateThread implementation
-  (void)thread;
-  (void)start_routine;
-  (void)arg;
-  return -1; // Not yet implemented
+  // Windows thread creation with adapter for POSIX-style functions
+  ak_print_warning("WARNING: Windows threading implementation is UNTESTED CODE\n");
+
+  // Allocate adapter structure to pass both function and arg
+  ak_win_thread_adapter_t *adapter =
+    (ak_win_thread_adapter_t *)AK24_ALLOC(sizeof(ak_win_thread_adapter_t));
+  if (!adapter) {
+    return -1;
+  }
+
+  adapter->start_routine = start_routine;
+  adapter->arg = arg;
+
+  // Create Windows thread
+  DWORD thread_id;
+  thread->handle = CreateThread(
+    NULL,                           // Default security attributes
+    0,                              // Default stack size
+    ak_win_thread_wrapper,          // Thread function wrapper
+    adapter,                        // Parameter to thread function
+    0,                              // Default creation flags
+    &thread_id                      // Receive thread identifier
+  );
+
+  if (thread->handle == NULL) {
+    AK24_FREE(adapter);
+    return -1;
+  }
+
+  return 0;
 #else
 #error "Unsupported platform"
 #endif
@@ -572,9 +675,21 @@ int AK_THREAD_JOIN(AK_THREAD thread) {
 #ifdef AK24_PLATFORM_POSIX
   return pthread_join(thread.handle, NULL);
 #elif defined(AK24_PLATFORM_WINDOWS)
-  // TODO: Windows WaitForSingleObject implementation
-  (void)thread;
-  return -1; // Not yet implemented
+  // Wait for Windows thread to complete
+  if (thread.handle == NULL) {
+    return -1;
+  }
+
+  DWORD result = WaitForSingleObject(thread.handle, INFINITE);
+
+  if (result == WAIT_OBJECT_0) {
+    // Thread completed successfully, close the handle
+    CloseHandle(thread.handle);
+    return 0;
+  }
+
+  // Wait failed
+  return -1;
 #else
 #error "Unsupported platform"
 #endif
@@ -584,9 +699,17 @@ int AK_THREAD_DETACH(AK_THREAD thread) {
 #ifdef AK24_PLATFORM_POSIX
   return pthread_detach(thread.handle);
 #elif defined(AK24_PLATFORM_WINDOWS)
-  // TODO: Windows CloseHandle implementation
-  (void)thread;
-  return -1; // Not yet implemented
+  // On Windows, detaching means closing the handle immediately
+  // This allows the thread to clean up automatically when it exits
+  if (thread.handle == NULL) {
+    return -1;
+  }
+
+  if (CloseHandle(thread.handle)) {
+    return 0;
+  }
+
+  return -1;
 #else
 #error "Unsupported platform"
 #endif

@@ -125,9 +125,9 @@ endif()
 # Platform-specific threading libraries
 if(UNIX OR APPLE)
     target_link_libraries(ak24_kernel PUBLIC pthread)
+    message(STATUS \"Threading: POSIX pthreads\")
 elseif(WIN32)
-    # Windows threading is built into kernel32.lib (linked by default)
-endif()
+    # Windows threading is built into kernel32.lib (linked by default on Windows)\n    # Explicitly link if needed for MinGW\n    if(NOT MSVC)\n        target_link_libraries(ak24_kernel PUBLIC kernel32)\n    endif()\n    message(STATUS \"Threading: Windows native (kernel32)\")\nendif()
 
 set_target_properties(ak24_kernel PROPERTIES
     OUTPUT_NAME "ak24_kernel"

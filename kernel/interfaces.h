@@ -4,53 +4,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-/*
-
-     The kernel itslef is a library and small application framework.
-     The kernel offers functionalities and whatnot, but in order to extend the
-   application we will make "modules" that are external to the kernel itself.
-   These modules will have to provide a set of interfaces on registration in
-   order to be able to interact with the kernel
-
-     The application layer can decide what to add or not to based on their
-   needs/demands.
-
-     The first thing we need to define is the interface that the kernel will use
-   to present itself to the application for the sake of registering modules. We
-   will create the module system such-that the modules can be arbitrarily
-     loaded/unloaded at runtime through atomic thread-safe operations.
-
-     1. User does calls ak_kernel_get_module_ctx(); to get a handle to the
-   interface That permits adding/removing modules. The kernel itself will have a
-   singleton that is guarded through this interface.
-
-     2. The user provides the full path of the module to load, along with a
-   ak_lambda_t + ctx for callback when that instance of the module is UNLOADED
-
-        The user will provide to us, through an enum of C types on a struct with
-   meta information (pointer depth, etc) the expected functions that the module
-   should provide along with their expected signatures (return type + param
-   types).
-
-        The user will provide if they want the module interactions to be
-   "thread-safe" or not.
-
-     3. If the function is able to be found, loaded, and all expected functions
-   are present as they are expected to be present, the kernel will make a struct
-   with lambdas on as a return result so the user can then call those functions
-   via the lambdas as they see fit
-
-        if they wanted thread-safe operations into the module, then the lambdas
-   constructed will have internal locking mechanisms to ensure thread-safety.
-
-        no matter the case, both variants will ensure that intance of the module
-   is still loaded and callable (small overhead that is worht it for safety)
-
-        In the event that there is a failure, the funtion will return NULL and
-   set the error ref param (in) stating there was an error
-
-*/
-
 typedef struct ak_lambda_t ak_lambda_t;
 
 /**

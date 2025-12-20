@@ -4,7 +4,7 @@ PROJECT_BRIEF          = "AK24 - Application Kernel 24, Core Runtime Library"
 PROJECT_LOGO           = assets/ak24-logo-small-dark.svg
 
 OUTPUT_DIRECTORY       = docs/api
-CREATE_SUBDIRS         = YES
+CREATE_SUBDIRS         = NO
 ALLOW_UNICODE_NAMES    = YES
 
 OPTIMIZE_OUTPUT_FOR_C  = YES

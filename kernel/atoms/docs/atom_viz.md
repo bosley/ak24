@@ -226,8 +226,3 @@ Distance 3: 8 atoms (corners of outer shell)
 3. **Bonds are bidirectional**:
    - If A bonds to B, then B bonds to A
    - Both atoms track the connection
-
-4. **No directional filtering yet**:
-   - Queries return entire shells at a distance
-   - Cannot yet query "only atoms in the +x direction"
-   - Future enhancement: dimensional slicing

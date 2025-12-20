@@ -1,18 +1,127 @@
+/**
+ * @file application.h
+ * @brief Application framework with automatic kernel lifecycle management
+ *
+ * Provides macros for creating AK24 applications with automatic kernel
+ * initialization, shutdown handling, and argument processing. The framework
+ * handles boilerplate setup code and provides a clean application entry point.
+ *
+ * Key features:
+ * - Automatic kernel init/deinit
+ * - Command-line argument processing
+ * - Shutdown callback registration
+ * - Application context with runtime information
+ * - Macro-based application definition
+ *
+ * @note Use AK24_APPLICATION macro to define application entry point
+ *
+ * @par Example:
+ * @code
+ * APP_MAIN(my_app) {
+ *   printf("Args: %u\n", list_count(&ctx->args));
+ *   return 0;
+ * }
+ *
+ * APP_ON_SHUTDOWN(my_shutdown) {
+ *   printf("Shutting down\n");
+ * }
+ *
+ * AK24_APPLICATION(my_app, my_shutdown)
+ * @endcode
+ */
+
 #ifndef AK24_APPLICATION_H
 #define AK24_APPLICATION_H
 
 #include "kernel.h"
 #include <string.h>
 
+/**
+ * @brief Application context
+ *
+ * Provides access to command-line arguments and shutdown information.
+ */
 typedef struct {
-  list_str_t args;
-  kernel_shutdown_info_t *shutdown_info;
+  list_str_t args; /**< Command-line arguments */
+  kernel_shutdown_info_t
+      *shutdown_info; /**< Shutdown info (NULL until shutdown) */
 } ak_app_context_t;
 
+/**
+ * @def APP_ON_SHUTDOWN
+ * @brief Define application shutdown handler
+ *
+ * Creates a function signature for shutdown callback. The function receives
+ * the application context with shutdown information populated.
+ *
+ * @param name Name of shutdown function
+ *
+ * @par Example:
+ * @code
+ * APP_ON_SHUTDOWN(cleanup) {
+ *   printf("Cleaning up resources\n");
+ *   list_deinit(&ctx->args);
+ * }
+ * @endcode
+ */
 #define APP_ON_SHUTDOWN(name) void name(ak_app_context_t *ctx)
 
+/**
+ * @def APP_MAIN
+ * @brief Define application main function
+ *
+ * Creates a function signature for application entry point. The function
+ * receives the application context with parsed arguments.
+ *
+ * @param name Name of main function
+ * @return Exit code (0 for success)
+ *
+ * @par Example:
+ * @code
+ * APP_MAIN(my_app) {
+ *   if (list_count(&ctx->args) < 2) {
+ *     printf("Usage: %s <file>\n", *list_get(&ctx->args, 0));
+ *     return 1;
+ *   }
+ *   return 0;
+ * }
+ * @endcode
+ */
 #define APP_MAIN(name) int name(ak_app_context_t *ctx)
 
+/**
+ * @def AK24_APPLICATION
+ * @brief Define complete AK24 application
+ *
+ * Generates main() function with automatic kernel initialization, argument
+ * processing, shutdown callback registration, and cleanup. Both parameters
+ * should be function names defined with APP_MAIN and APP_ON_SHUTDOWN.
+ *
+ * @param app_main_fn Main application function (can be NULL)
+ * @param app_shutdown_fn Shutdown handler function (can be NULL)
+ *
+ * The generated main() function:
+ * 1. Initializes kernel with ak_kernel_init()
+ * 2. Processes command-line arguments into list
+ * 3. Registers shutdown callback
+ * 4. Invokes application main function
+ * 5. Deinitializes kernel (triggers shutdown callbacks)
+ * 6. Returns application exit code
+ *
+ * @par Example:
+ * @code
+ * APP_MAIN(my_app) {
+ *   AK24_LOG_INFO("Application started");
+ *   return 0;
+ * }
+ *
+ * APP_ON_SHUTDOWN(my_cleanup) {
+ *   AK24_LOG_INFO("Application ending");
+ * }
+ *
+ * AK24_APPLICATION(my_app, my_cleanup)
+ * @endcode
+ */
 #define AK24_APPLICATION(app_main_fn, app_shutdown_fn)                         \
   static ak_app_context_t __ak_app_ctx;                                        \
                                                                                \

@@ -26,7 +26,11 @@
 #include <stdatomic.h>
 #include <stddef.h>
 
-#define AK24_ARBUFF_VERSION "0.1.0"
+/**
+ * @def AK24_ARBUFF_VERSION
+ * @brief Arbuff module version string
+ */
+#define ARBUFF_VERSION "0.0.1-dev"
 
 /**
  * @brief Internal slot structure for the ring buffer

@@ -173,10 +173,8 @@ xdg-open docs/api/html/index.html      # View docs (Linux)
 
 ## Documentation Status
 
-### ✅ Documented (1/13)
+### ✅ Documented (13/13)
 - `kernel/arbuff/include/arbuff.h`
-
-### ⏳ Pending (12/13)
 - `kernel/atoms/include/atom.h`
 - `kernel/buffer/include/buffer.h`
 - `kernel/context/include/context.h`
@@ -184,13 +182,13 @@ xdg-open docs/api/html/index.html      # View docs (Linux)
 - `kernel/forms/include/forms_primitives.h`
 - `kernel/lambda/include/lambda.h`
 - `kernel/list/include/list.h`
+- `kernel/log/include/log.h`
 - `kernel/map/include/map.h`
 - `kernel/scanner/include/scanner.h`
-- `kernel/log/include/log.h`
 - `kernel/kernel.h`
 - `kernel/application.h`
 
-**Current Coverage: 7%**
+**Current Coverage: 100%**
 
 Run `./docs/check_docs.sh` for live status.
 

@@ -4,7 +4,10 @@ The threads module provides a thread pool system for managing concurrent executi
 
 ## Platform Support
 
-When I initially made the thread pool the focus was nix only. I figure with large langauage models helping (as they are now as  )
+When I initially made the thread pool the focus was nix only. I figure with large langauage models helping (as they are now as a refactor
+and documentation boyo) I would try generating the windows stuff and testing it (seeing as i have no intention of targeting windows atm)
+but I just can't permit auto generated untested never-actually-used code to linger in my library here, so the windows stuff will remain
+stubbed until I or someone can do the work of testing/validating it.
 
 The thread pool is **cross-platform ready** with clean separation:
 

@@ -233,6 +233,8 @@ install(TARGETS ak24_kernel
 install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel.h
     ${CMAKE_CURRENT_SOURCE_DIR}/application.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/interfaces.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules.h
     DESTINATION include/ak24
 )
 

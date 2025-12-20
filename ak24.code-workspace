@@ -12,7 +12,8 @@
 			"*.c": "c"
 		},
 		"cmake.configureOnOpen": false,
-		"cmake.buildDirectory": "${workspaceFolder}/build"
+		"cmake.buildDirectory": "${workspaceFolder}/build",
+		"makefile.configureOnOpen": false
 	},
 	"extensions": {
 		"recommendations": [

@@ -35,9 +35,27 @@ file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/src/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/log/src/*.c
 )
+
+# Platform-specific threading sources
+if(WIN32)
+    file(GLOB THREADS_PLATFORM_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/win/*.c
+    )
+else()
+    file(GLOB THREADS_PLATFORM_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/nix/*.c
+    )
+endif()
+
+# Exclude platform-specific directories from main glob
+list(FILTER KERNEL_SOURCES EXCLUDE REGEX ".*/src/(nix|win)/.*")
+
+# Add platform-specific sources
+list(APPEND KERNEL_SOURCES ${THREADS_PLATFORM_SOURCES})
 
 file(GLOB_RECURSE KERNEL_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/map/test/*.c
@@ -49,6 +67,7 @@ file(GLOB_RECURSE KERNEL_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/threads/test/*.c
 )
 
 file(GLOB_RECURSE KERNEL_HEADERS
@@ -61,6 +80,7 @@ file(GLOB_RECURSE KERNEL_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/threads/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/log/include/*.h
 )
@@ -85,6 +105,7 @@ target_include_directories(ak24_kernel PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/lambda/include
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/include
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/threads/include
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include
     ${CMAKE_CURRENT_SOURCE_DIR}/log/include
@@ -99,6 +120,13 @@ if(AK24_GC_ENABLED)
             -Wl,-w
         )
     endif()
+endif()
+
+# Platform-specific threading libraries
+if(UNIX OR APPLE)
+    target_link_libraries(ak24_kernel PUBLIC pthread)
+elseif(WIN32)
+    # Windows threading is built into kernel32.lib (linked by default)
 endif()
 
 set_target_properties(ak24_kernel PROPERTIES
@@ -116,6 +144,7 @@ file(GLOB_RECURSE ALL_COMPILE_TIME_TESTS
     ${CMAKE_CURRENT_SOURCE_DIR}/context/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/buffer/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/threads/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/test/*.c
 )
@@ -246,6 +275,7 @@ install(DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/context/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/lambda/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/threads/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include/

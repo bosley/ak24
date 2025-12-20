@@ -1,4 +1,4 @@
-.PHONY: all clean configure build test install
+.PHONY: all clean configure build test install docs docs-clean
 
 BUILD_DIR := build
 BUILD_TYPE ?= Release
@@ -16,6 +16,15 @@ build: configure
 
 test: build
 	@$(BUILD_DIR)/bin/ak24_tests
+
+docs:
+	@echo "Generating API documentation with Doxygen..."
+	@doxygen Doxyfile
+	@echo "Documentation generated in docs/api/html/"
+	@echo "Open docs/api/html/index.html to view"
+
+docs-clean:
+	@rm -rf docs/api
 
 clean:
 	@rm -rf $(BUILD_DIR)

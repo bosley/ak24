@@ -28,6 +28,7 @@
 #include "context.h"
 #include "forms.h"
 #include "forms_primitives.h"
+#include "interfaces.h"
 #include "lambda.h"
 #include "list.h"
 #include "log.h"
@@ -373,5 +374,16 @@ void ak_on_shutdown(ak_lambda_t *lambda);
  * @note Caller must deinitialize returned list with list_deinit()
  */
 list_str_t ak_args_to_list(int argc, char **argv);
+
+// ---- New need to doc
+
+/*
+    Returns owned pointer to a module context. when done, call the
+    matching free. this sill not stop or unload any modules, only
+    the handle to control module that was received from get_ctx
+*/
+ak_module_ctx_t *ak_module_get_system_ctx(void);
+
+void ak_module_free_system_ctx(ak_module_ctx_t *ctx);
 
 #endif

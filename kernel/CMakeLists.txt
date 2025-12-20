@@ -88,6 +88,7 @@ target_include_directories(ak24_kernel PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include
     ${CMAKE_CURRENT_SOURCE_DIR}/log/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include
 )
 
 if(AK24_GC_ENABLED)
@@ -233,6 +234,8 @@ install(TARGETS ak24_kernel
 install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel.h
     ${CMAKE_CURRENT_SOURCE_DIR}/application.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/interfaces.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules.h
     DESTINATION include/ak24
 )
 
@@ -247,6 +250,7 @@ install(DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/log/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include/
     DESTINATION include/ak24
     FILES_MATCHING PATTERN "*.h"
 )

@@ -31,7 +31,6 @@ struct ak_task_t {
 struct ak_thread_pool_t {
   // Configuration
   size_t max_workers;
-  size_t min_workers;
   size_t max_queue_size;
 
   // Worker threads
@@ -249,7 +248,6 @@ static void *worker_thread(void *arg) {
 ak_thread_pool_config_t ak_thread_pool_config_default(void) {
   ak_thread_pool_config_t config;
   config.max_workers = AK24_THREAD_POOL_DEFAULT_MAX_WORKERS;
-  config.min_workers = AK24_THREAD_POOL_DEFAULT_MIN_WORKERS;
   config.max_queue_size = AK24_THREAD_POOL_DEFAULT_QUEUE_SIZE;
   return config;
 }
@@ -261,7 +259,7 @@ ak_thread_pool_t *ak_thread_pool_new(const ak_thread_pool_config_t *config) {
     config = &default_config;
   }
 
-  if (config->max_workers == 0 || config->min_workers > config->max_workers) {
+  if (config->max_workers == 0) {
     return NULL;
   }
 
@@ -271,9 +269,8 @@ ak_thread_pool_t *ak_thread_pool_new(const ak_thread_pool_config_t *config) {
   }
 
   pool->max_workers = config->max_workers;
-  pool->min_workers = config->min_workers;
   pool->max_queue_size = config->max_queue_size;
-  pool->worker_count = config->min_workers;
+  pool->worker_count = config->max_workers;
   pool->active_count = 0;
   pool->queue_head = NULL;
   pool->queue_tail = NULL;

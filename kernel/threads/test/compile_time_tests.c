@@ -42,7 +42,6 @@ static void test_enums_complete(void) {
 static void test_config_struct(void) {
   ak_thread_pool_config_t config;
   config.max_workers = 8;
-  config.min_workers = 2;
   config.max_queue_size = 100;
 
   (void)config;
@@ -55,11 +54,6 @@ static void test_default_config(void) {
   // Check defaults are reasonable
   _Static_assert(AK24_THREAD_POOL_DEFAULT_MAX_WORKERS > 0,
                  "Default max workers must be > 0");
-  _Static_assert(AK24_THREAD_POOL_DEFAULT_MIN_WORKERS > 0,
-                 "Default min workers must be > 0");
-  _Static_assert(AK24_THREAD_POOL_DEFAULT_MIN_WORKERS <=
-                     AK24_THREAD_POOL_DEFAULT_MAX_WORKERS,
-                 "Default min workers must be <= max workers");
 
   (void)config;
 }

@@ -39,12 +39,6 @@
 #define AK24_THREAD_POOL_DEFAULT_MAX_WORKERS 8
 
 /**
- * @def AK24_THREAD_POOL_DEFAULT_MIN_WORKERS
- * @brief Default minimum worker threads
- */
-#define AK24_THREAD_POOL_DEFAULT_MIN_WORKERS 2
-
-/**
  * @def AK24_THREAD_POOL_DEFAULT_QUEUE_SIZE
  * @brief Default maximum queue size (0 = unlimited)
  */
@@ -82,8 +76,7 @@ typedef enum {
  * Configuration structure for thread pool creation.
  */
 typedef struct {
-  size_t max_workers;    /**< Maximum number of worker threads */
-  size_t min_workers;    /**< Minimum number of worker threads */
+  size_t max_workers;    /**< Number of worker threads (fixed size pool) */
   size_t max_queue_size; /**< Maximum task queue size (0 = unlimited) */
 } ak_thread_pool_config_t;
 

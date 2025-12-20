@@ -35,6 +35,9 @@ void cleanup_task_data(void *ctx) {
 }
 
 int main(int argc, char **argv) {
+  (void)argc;
+  (void)argv;
+
   ak_kernel_init();
 
   printf("\n=== Thread Pool Demo ===\n\n");
@@ -42,10 +45,9 @@ int main(int argc, char **argv) {
   // Create thread pool with custom configuration
   ak_thread_pool_config_t config = ak_thread_pool_config_default();
   config.max_workers = 4;
-  config.min_workers = 2;
   config.max_queue_size = 0; // Unlimited
 
-  printf("Creating thread pool with %zu workers...\n", config.min_workers);
+  printf("Creating thread pool with %zu workers...\n", config.max_workers);
   ak_thread_pool_t *pool = ak_thread_pool_new(&config);
 
   if (!pool) {

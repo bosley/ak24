@@ -43,7 +43,6 @@ static int test_pool_create_free(void) {
 static int test_pool_custom_config(void) {
   ak_thread_pool_config_t config = ak_thread_pool_config_default();
   config.max_workers = 4;
-  config.min_workers = 2;
   config.max_queue_size = 10;
 
   ak_thread_pool_t *pool = ak_thread_pool_new(&config);
@@ -60,12 +59,6 @@ static int test_pool_invalid_config(void) {
   config.max_workers = 0; // Invalid
 
   ak_thread_pool_t *pool = ak_thread_pool_new(&config);
-  AK24_TEST_ASSERT_NULL(pool);
-
-  config.max_workers = 4;
-  config.min_workers = 8; // Invalid: min > max
-
-  pool = ak_thread_pool_new(&config);
   AK24_TEST_ASSERT_NULL(pool);
 
   AK24_TEST_PASS();
@@ -224,7 +217,6 @@ static void sleeping_task(void *ctx, void *args) {
 static int test_pool_status(void) {
   ak_thread_pool_config_t config = ak_thread_pool_config_default();
   config.max_workers = 2;
-  config.min_workers = 2;
 
   ak_thread_pool_t *pool = ak_thread_pool_new(&config);
   AK24_TEST_ASSERT_NOT_NULL(pool);
@@ -290,6 +282,13 @@ static int test_state_strings(void) {
   AK24_TEST_PASS();
 }
 
+// Helper for shutdown test
+static void *shutdown_helper(void *arg) {
+  ak_thread_pool_t *pool = (ak_thread_pool_t *)arg;
+  ak_thread_pool_free(pool);
+  return NULL;
+}
+
 // Test: Enqueue failure when pool is shutting down
 static int test_enqueue_during_shutdown(void) {
   ak_thread_pool_t *pool = ak_thread_pool_new(NULL);
@@ -297,8 +296,7 @@ static int test_enqueue_during_shutdown(void) {
 
   // Start shutdown in another thread
   pthread_t shutdown_thread;
-  pthread_create(&shutdown_thread, NULL, (void *(*)(void *))ak_thread_pool_free,
-                 pool);
+  pthread_create(&shutdown_thread, NULL, shutdown_helper, pool);
 
   // Give shutdown a moment to start
   usleep(1000);

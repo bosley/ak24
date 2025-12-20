@@ -21,6 +21,18 @@
 #include <stddef.h>
 
 /**
+ * @brief Module lifecycle state
+ *
+ * Tracks the current state of a loaded module to prevent invalid operations.
+ */
+typedef enum {
+  MODULE_STATE_LOADING = 0, /**< Module is being loaded */
+  MODULE_STATE_LOADED,      /**< Module is loaded and operational */
+  MODULE_STATE_UNLOADING,   /**< Module is being unloaded */
+  MODULE_STATE_FAILED       /**< Module failed to load/init */
+} module_state_e;
+
+/**
  * @brief Internal module instance
  *
  * Represents a loaded dynamic library with module context and vtable.
@@ -35,6 +47,7 @@ typedef struct module_instance_s {
   void *unload_callback_ctx;     /**< Context for unload callback */
   pthread_mutex_t *access_mutex; /**< Per-module mutex (NULL if !thread_safe) */
   _Atomic size_t ref_count;      /**< Active function call counter */
+  _Atomic int state;             /**< Current module state (module_state_e) */
   bool thread_safe;              /**< Whether functions require locking */
 } module_instance_t;
 

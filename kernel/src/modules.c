@@ -1,6 +1,7 @@
 #include "modules.h"
 #include "kernel.h"
 #include <dlfcn.h>
+#include <stdlib.h>
 #include <string.h>
 
 // Forward declarations
@@ -12,6 +13,9 @@ static void destroy_module_instance(module_instance_t *instance);
 static ak_module_handle_t *load_module_impl(ak_module_load_options_t *options,
                                             const char **error);
 static bool unload_module_impl(ak_module_handle_t *handle, const char **error);
+static bool verify_function_in_module(void *dl_handle, void *fn_ptr,
+                                      const char *expected_path);
+static bool validate_module_ctx(void *ctx);
 
 // Module allocator functions
 static void *module_alloc(size_t size);
@@ -27,15 +31,111 @@ static ak_module_allocator_t g_module_allocator = {
     .alloc = module_alloc, .realloc = module_realloc, .free = module_free};
 
 /**
- * @brief Module allocator - uses kernel memory
+ * @brief Module allocator - uses regular malloc/free, NOT GC
+ *
+ * IMPORTANT: Modules must use non-GC allocation because:
+ * 1. Module code is unloaded via dlclose() before GC collection
+ * 2. GC might try to scan/finalize memory after code is unmapped
+ * 3. This causes segfaults or undefined behavior
+ *
+ * By using malloc/free, we ensure all module memory is explicitly
+ * freed before dlclose(), avoiding GC/dlclose race conditions.
+ *
+ * NOTE: In future, we could implement a custom allocator that limits
+ * memory usage per module, tracks allocations, etc.
  */
-static void *module_alloc(size_t size) { return AK24_ALLOC(size); }
+static void *module_alloc(size_t size) { return malloc(size); }
 
 static void *module_realloc(void *ptr, size_t size) {
-  return AK24_REALLOC(ptr, size);
+  return realloc(ptr, size);
 }
 
-static void module_free(void *ptr) { AK24_FREE(ptr); }
+static void module_free(void *ptr) { free(ptr); }
+
+/**
+ * @brief Verify function pointer is from the expected module
+ *
+ * Uses dladdr() to verify that a function pointer actually belongs to
+ * the loaded module, preventing pointer hijacking or confusion.
+ *
+ * @param dl_handle Module's dlopen handle
+ * @param fn_ptr Function pointer to verify
+ * @param expected_path Expected module file path
+ * @return true if function is from expected module
+ */
+static bool verify_function_in_module(void *dl_handle, void *fn_ptr,
+                                      const char *expected_path) {
+  (void)dl_handle; // Currently unused but keep for future, and (void) to avoid
+                   // warnings
+
+  if (!fn_ptr || !expected_path) {
+    return false;
+  }
+
+  Dl_info info;
+  if (dladdr(fn_ptr, &info) == 0 || !info.dli_fname) {
+    return false; // dladdr failed
+  }
+
+  return strcmp(info.dli_fname, expected_path) == 0;
+}
+
+/**
+ * @brief Validate module context pointer
+ *
+ * Performs basic sanity checks on the module context pointer returned
+ * from module init to detect obvious corruption or invalid values.
+ *
+ * @param ctx Module context pointer
+ * @return true if context appears valid
+ */
+static bool validate_module_ctx(void *ctx) {
+  if (!ctx) {
+    return false;
+  }
+
+  /*
+    * Basic sanity checks:
+    * - Pointer is not NULL
+    * - Pointer is aligned to pointer size
+
+    I don't really know if this is sufficient, but it's better than nothing.
+  */
+  if (((uintptr_t)ctx & (sizeof(void *) - 1)) != 0) {
+    return false;
+  }
+
+  // region ???
+  // bounds and canarys etc
+
+  return true;
+}
+
+/**
+ * @brief Stub for per-module resource tracking
+ *
+ * TODO: Implement resource tracking including:
+ * - Memory allocation accounting per module
+ * - File descriptor tracking
+ * - Thread/CPU time limits
+ * - Network connection monitoring
+ *
+ * This would integrate with the module allocator to track all resources
+ * acquired by a module, enabling:
+ * - Resource limits and quotas
+ * - Leak detection on module unload
+ * - Resource usage reporting
+ *
+ * @param instance Module instance to track resources for
+ */
+static void track_module_resources(module_instance_t *instance) {
+  (void)instance;
+
+  // I dont want to do this until the module system is fully tested
+  // and has proven itself under at least a litte load. Probalbly implement
+  // this when we first start having things fall apart under load and
+  // need to limit the resource so im keeping this in
+}
 
 /**
  * @brief Get or create the singleton module manager
@@ -109,7 +209,17 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
     return NULL;
   }
 
-  // Load required module functions (suppress -Wpedantic for dlsym)
+/*
+  Here is where "the rubber meets the road" and we have to actually grab
+  things out of the external library. So what we do is look for the api
+  functions that we state we expect
+
+  We have to ignore pedants here because undefiend C behavior promised
+  by POSIX is how we get the dlsym to work with function pointers.
+
+  When we adapt this to WIN we will need to block here, and use their loading
+  mechanisms instead. - bosley
+*/
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
   int (*version_fn)(void) =
@@ -137,7 +247,11 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
     return NULL;
   }
 
-  // Check API version
+  /*
+    straight comparison for now, but we could be a little more granular
+    in the future if we want to allow for some level of backward compatibility
+    or something like that
+  */
   if (version_fn() != AK24_MODULE_API_VERSION) {
     if (error)
       *error = "Module API version mismatch";
@@ -145,7 +259,7 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
     return NULL;
   }
 
-  // Allocate instance
+  // Allocate module instance that will hold state
   module_instance_t *instance =
       (module_instance_t *)AK24_ALLOC(sizeof(module_instance_t));
   if (!instance) {
@@ -155,7 +269,9 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
     return NULL;
   }
 
-  // Initialize instance
+  atomic_store_explicit((_Atomic int *)&instance->state, MODULE_STATE_LOADING,
+                        memory_order_relaxed);
+
   instance->dl_handle = dl_handle;
   instance->path = (char *)AK24_ALLOC(strlen(options->module_path) + 1);
   if (!instance->path) {
@@ -172,7 +288,12 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
   instance->thread_safe = options->thread_safe;
   atomic_store_explicit(&instance->ref_count, 0, memory_order_relaxed);
 
-  // Store vtable
+  /*
+    setup a virtual table that points to the functions we loaded from the module
+    so that we can call them later via the instance
+
+    this is basically what classes are under the hood in C++ btw
+  */
   instance->vtable.ak_module_version = version_fn;
   instance->vtable.ak_module_init = init_fn;
   instance->vtable.ak_module_deinit = deinit_fn;
@@ -180,11 +301,39 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
   instance->vtable.ak_module_get_function = get_fn;
   instance->vtable.ak_module_get_function_signature = get_sig_fn;
 
-  // Create per-module mutex if thread-safe
+  /*
+    Verify that the function pointers actually belong to the loaded module
+    to prevent pointer hijacking or confusion. This is a itty bitty security
+    measure.
+  */
+  if (!verify_function_in_module(dl_handle, (void *)version_fn,
+                                 options->module_path)) {
+    atomic_store_explicit((_Atomic int *)&instance->state, MODULE_STATE_FAILED,
+                          memory_order_release);
+    if (error)
+      *error = "Function pointer validation failed";
+    if (instance->access_mutex) {
+      pthread_mutex_destroy(instance->access_mutex);
+      AK24_FREE(instance->access_mutex);
+    }
+    AK24_FREE(instance->path);
+    dlclose(dl_handle);
+    AK24_FREE(instance);
+    return NULL;
+  }
+
+  /*
+    Initialize per-module mutex if thread-safe access requested by the caller.
+    This is where when the app caller says "i want to use this module but make
+    it safe for threads" we set that up here and auto-magically handle locking
+    in the lambdas we create for the user later on down the line
+  */
   if (options->thread_safe) {
     instance->access_mutex =
         (pthread_mutex_t *)AK24_ALLOC(sizeof(pthread_mutex_t));
     if (!instance->access_mutex) {
+      atomic_store_explicit((_Atomic int *)&instance->state,
+                            MODULE_STATE_FAILED, memory_order_release);
       AK24_FREE(instance->path);
       dlclose(dl_handle);
       AK24_FREE(instance);
@@ -203,6 +352,8 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
   ak_module_result_e result =
       init_fn(&module_ctx, &g_module_allocator, &init_error);
   if (result != AK_MODULE_OK) {
+    atomic_store_explicit((_Atomic int *)&instance->state, MODULE_STATE_FAILED,
+                          memory_order_release);
     if (error)
       *error = init_error ? init_error : "Module init failed";
     if (instance->access_mutex) {
@@ -217,6 +368,33 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
 
   instance->module_ctx = module_ctx;
 
+  // Validate module context
+  if (!validate_module_ctx(module_ctx)) {
+    atomic_store_explicit((_Atomic int *)&instance->state, MODULE_STATE_FAILED,
+                          memory_order_release);
+    if (error)
+      *error = "Module context validation failed";
+    // Module init succeeded so we should deinit
+    if (deinit_fn) {
+      deinit_fn(module_ctx);
+    }
+    if (instance->access_mutex) {
+      pthread_mutex_destroy(instance->access_mutex);
+      AK24_FREE(instance->access_mutex);
+    }
+    AK24_FREE(instance->path);
+    dlclose(dl_handle);
+    AK24_FREE(instance);
+    return NULL;
+  }
+
+  // start tracking state (later) and set to laoded
+
+  track_module_resources(instance);
+
+  atomic_store_explicit((_Atomic int *)&instance->state, MODULE_STATE_LOADED,
+                        memory_order_release);
+
   return instance;
 }
 
@@ -227,6 +405,10 @@ static void destroy_module_instance(module_instance_t *instance) {
   if (!instance) {
     return;
   }
+
+  // Transition to UNLOADING state
+  atomic_store_explicit((_Atomic int *)&instance->state, MODULE_STATE_UNLOADING,
+                        memory_order_release);
 
   // Wait for all active function calls to complete
   while (atomic_load_explicit(&instance->ref_count, memory_order_acquire) > 0) {
@@ -362,6 +544,23 @@ static bool unload_module_impl(ak_module_handle_t *handle, const char **error) {
     pthread_mutex_unlock(&mgr->registry_mutex);
     if (error)
       *error = "Module not found in registry";
+    return false;
+  }
+
+  // Check module state - must be LOADED to unload
+  int current_state = atomic_load_explicit(
+      (_Atomic int *)&found_instance->state, memory_order_acquire);
+  if (current_state != MODULE_STATE_LOADED) {
+    pthread_mutex_unlock(&mgr->registry_mutex);
+    if (error) {
+      if (current_state == MODULE_STATE_UNLOADING) {
+        *error = "Module is already being unloaded";
+      } else if (current_state == MODULE_STATE_LOADING) {
+        *error = "Module is still loading";
+      } else {
+        *error = "Module is in invalid state";
+      }
+    }
     return false;
   }
 

@@ -41,7 +41,7 @@ void ak_root_form_ctx_free(root_form_ctx_t *root) {
 
 static ak_form_t *root_form_ctx_get_or_create(root_form_ctx_t *root,
                                               const char *name,
-                                              ak_atom_type_e type) {
+                                              ak_form_primitive_type_e type) {
   if (!root || !root->ctx) {
     return NULL;
   }
@@ -65,87 +65,91 @@ static ak_form_t *root_form_ctx_get_or_create(root_form_ctx_t *root,
 }
 
 ak_form_t *ak_root_form_ctx_get_bool(root_form_ctx_t *root) {
-  return root_form_ctx_get_or_create(root, "bool", AK24_ATOM_U8);
+  return root_form_ctx_get_or_create(root, "bool", AK_FORM_PRIMITIVE_U8);
 }
 
 ak_form_t *ak_root_form_ctx_get_u8(root_form_ctx_t *root) {
-  return root_form_ctx_get_or_create(root, "u8", AK24_ATOM_U8);
+  return root_form_ctx_get_or_create(root, "u8", AK_FORM_PRIMITIVE_U8);
 }
 
 ak_form_t *ak_root_form_ctx_get_u16(root_form_ctx_t *root) {
-  return root_form_ctx_get_or_create(root, "u16", AK24_ATOM_U16);
+  return root_form_ctx_get_or_create(root, "u16", AK_FORM_PRIMITIVE_U16);
 }
 
 ak_form_t *ak_root_form_ctx_get_u32(root_form_ctx_t *root) {
-  return root_form_ctx_get_or_create(root, "u32", AK24_ATOM_U32);
+  return root_form_ctx_get_or_create(root, "u32", AK_FORM_PRIMITIVE_U32);
 }
 
 ak_form_t *ak_root_form_ctx_get_u64(root_form_ctx_t *root) {
-  return root_form_ctx_get_or_create(root, "u64", AK24_ATOM_U64);
+  return root_form_ctx_get_or_create(root, "u64", AK_FORM_PRIMITIVE_U64);
 }
 
 ak_form_t *ak_root_form_ctx_get_i8(root_form_ctx_t *root) {
-  return root_form_ctx_get_or_create(root, "i8", AK24_ATOM_I8);
+  return root_form_ctx_get_or_create(root, "i8", AK_FORM_PRIMITIVE_I8);
 }
 
 ak_form_t *ak_root_form_ctx_get_i16(root_form_ctx_t *root) {
-  return root_form_ctx_get_or_create(root, "i16", AK24_ATOM_I16);
+  return root_form_ctx_get_or_create(root, "i16", AK_FORM_PRIMITIVE_I16);
 }
 
 ak_form_t *ak_root_form_ctx_get_i32(root_form_ctx_t *root) {
-  return root_form_ctx_get_or_create(root, "i32", AK24_ATOM_I32);
+  return root_form_ctx_get_or_create(root, "i32", AK_FORM_PRIMITIVE_I32);
 }
 
 ak_form_t *ak_root_form_ctx_get_i64(root_form_ctx_t *root) {
-  return root_form_ctx_get_or_create(root, "i64", AK24_ATOM_I64);
+  return root_form_ctx_get_or_create(root, "i64", AK_FORM_PRIMITIVE_I64);
 }
 
 ak_form_t *ak_root_form_ctx_get_f32(root_form_ctx_t *root) {
-  return root_form_ctx_get_or_create(root, "f32", AK24_ATOM_F32);
+  return root_form_ctx_get_or_create(root, "f32", AK_FORM_PRIMITIVE_F32);
 }
 
 ak_form_t *ak_root_form_ctx_get_f64(root_form_ctx_t *root) {
-  return root_form_ctx_get_or_create(root, "f64", AK24_ATOM_F64);
+  return root_form_ctx_get_or_create(root, "f64", AK_FORM_PRIMITIVE_F64);
 }
 
 ak_form_t *ak_primitive_bool(void) {
-  return ak_form_new_primitive(AK24_ATOM_U8);
+  return ak_form_new_primitive(AK_FORM_PRIMITIVE_U8);
 }
 
-ak_form_t *ak_primitive_u8(void) { return ak_form_new_primitive(AK24_ATOM_U8); }
+ak_form_t *ak_primitive_u8(void) {
+  return ak_form_new_primitive(AK_FORM_PRIMITIVE_U8);
+}
 
 ak_form_t *ak_primitive_u16(void) {
-  return ak_form_new_primitive(AK24_ATOM_U16);
+  return ak_form_new_primitive(AK_FORM_PRIMITIVE_U16);
 }
 
 ak_form_t *ak_primitive_u32(void) {
-  return ak_form_new_primitive(AK24_ATOM_U32);
+  return ak_form_new_primitive(AK_FORM_PRIMITIVE_U32);
 }
 
 ak_form_t *ak_primitive_u64(void) {
-  return ak_form_new_primitive(AK24_ATOM_U64);
+  return ak_form_new_primitive(AK_FORM_PRIMITIVE_U64);
 }
 
-ak_form_t *ak_primitive_i8(void) { return ak_form_new_primitive(AK24_ATOM_I8); }
+ak_form_t *ak_primitive_i8(void) {
+  return ak_form_new_primitive(AK_FORM_PRIMITIVE_I8);
+}
 
 ak_form_t *ak_primitive_i16(void) {
-  return ak_form_new_primitive(AK24_ATOM_I16);
+  return ak_form_new_primitive(AK_FORM_PRIMITIVE_I16);
 }
 
 ak_form_t *ak_primitive_i32(void) {
-  return ak_form_new_primitive(AK24_ATOM_I32);
+  return ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
 }
 
 ak_form_t *ak_primitive_i64(void) {
-  return ak_form_new_primitive(AK24_ATOM_I64);
+  return ak_form_new_primitive(AK_FORM_PRIMITIVE_I64);
 }
 
 ak_form_t *ak_primitive_f32(void) {
-  return ak_form_new_primitive(AK24_ATOM_F32);
+  return ak_form_new_primitive(AK_FORM_PRIMITIVE_F32);
 }
 
 ak_form_t *ak_primitive_f64(void) {
-  return ak_form_new_primitive(AK24_ATOM_F64);
+  return ak_form_new_primitive(AK_FORM_PRIMITIVE_F64);
 }
 
 typedef struct {

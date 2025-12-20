@@ -89,7 +89,7 @@ static ak_form_t *ak_form_clone(ak_form_t *form) {
   return clone;
 }
 
-ak_form_t *ak_form_new_primitive(ak_atom_type_e type) {
+ak_form_t *ak_form_new_primitive(ak_form_primitive_type_e type) {
   ak_form_t *form = AK24_ALLOC(sizeof(ak_form_t));
   if (!form) {
     return NULL;
@@ -229,7 +229,8 @@ ak_form_t *ak_form_new_list(ak_form_t *element_type) {
   return form;
 }
 
-ak_form_t *ak_form_new_map(ak_atom_type_e key_type, ak_form_t *value_type) {
+ak_form_t *ak_form_new_map(ak_form_primitive_type_e key_type,
+                           ak_form_t *value_type) {
   if (!value_type) {
     return NULL;
   }

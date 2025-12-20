@@ -1,12 +1,26 @@
 #ifndef AK24_FORMS_H
 #define AK24_FORMS_H
 
-#include "atom.h"
 #include "context.h"
 #include "lambda.h"
 #include "list.h"
 
 #define AK24_FORMS_VERSION "0.1.0"
+
+typedef enum {
+  AK_FORM_PRIMITIVE_BYTE,
+  AK_FORM_PRIMITIVE_U8,
+  AK_FORM_PRIMITIVE_U16,
+  AK_FORM_PRIMITIVE_U32,
+  AK_FORM_PRIMITIVE_U64,
+  AK_FORM_PRIMITIVE_I8,
+  AK_FORM_PRIMITIVE_I16,
+  AK_FORM_PRIMITIVE_I32,
+  AK_FORM_PRIMITIVE_I64,
+  AK_FORM_PRIMITIVE_F32,
+  AK_FORM_PRIMITIVE_F64,
+  AK_FORM_PRIMITIVE_CHAR,
+} ak_form_primitive_type_e;
 
 typedef enum {
   AK_FORM_PRIMITIVE,
@@ -34,7 +48,7 @@ struct ak_form_s {
   ak_form_kind_e kind;
   char *name;
   union {
-    ak_atom_type_e primitive;
+    ak_form_primitive_type_e primitive;
     list_void_t compound_parts;
     struct {
       ak_form_t *inner;
@@ -50,7 +64,7 @@ struct ak_form_s {
       ak_form_t *element_type;
     } list_form;
     struct {
-      ak_atom_type_e key_type;
+      ak_form_primitive_type_e key_type;
       ak_form_t *value_type;
     } map_form;
     struct {
@@ -60,7 +74,7 @@ struct ak_form_s {
   list_void_t affects;
 };
 
-ak_form_t *ak_form_new_primitive(ak_atom_type_e type);
+ak_form_t *ak_form_new_primitive(ak_form_primitive_type_e type);
 
 ak_form_t *ak_form_new_compound(list_void_t *parts);
 
@@ -72,7 +86,8 @@ ak_form_t *ak_form_new_struct(ak_form_t *pattern, list_str_t *field_names);
 
 ak_form_t *ak_form_new_list(ak_form_t *element_type);
 
-ak_form_t *ak_form_new_map(ak_atom_type_e key_type, ak_form_t *value_type);
+ak_form_t *ak_form_new_map(ak_form_primitive_type_e key_type,
+                           ak_form_t *value_type);
 
 ak_form_t *ak_form_new_named(const char *name, ak_form_t *form);
 

@@ -3,17 +3,17 @@
 #include "test/assert.h"
 
 static int test_primitive_form_creation(void) {
-  ak_form_t *form = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *form = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   AK24_TEST_ASSERT_NOT_NULL(form);
   AK24_TEST_ASSERT_EQ(form->kind, AK_FORM_PRIMITIVE);
-  AK24_TEST_ASSERT_EQ(form->data.primitive, AK24_ATOM_I32);
+  AK24_TEST_ASSERT_EQ(form->data.primitive, AK_FORM_PRIMITIVE_I32);
   ak_form_free(form);
   AK24_TEST_PASS();
 }
 
 static int test_compound_form_creation(void) {
-  ak_form_t *i32_form = ak_form_new_primitive(AK24_ATOM_I32);
-  ak_form_t *f64_form = ak_form_new_primitive(AK24_ATOM_F64);
+  ak_form_t *i32_form = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
+  ak_form_t *f64_form = ak_form_new_primitive(AK_FORM_PRIMITIVE_F64);
 
   list_void_t parts;
   list_init(&parts);
@@ -31,7 +31,7 @@ static int test_compound_form_creation(void) {
 }
 
 static int test_optional_form_creation(void) {
-  ak_form_t *inner = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *inner = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   ak_form_t *optional = ak_form_new_optional(inner);
 
   AK24_TEST_ASSERT_NOT_NULL(optional);
@@ -39,7 +39,7 @@ static int test_optional_form_creation(void) {
   AK24_TEST_ASSERT_NEQ(optional->data.optional.inner, inner);
   AK24_TEST_ASSERT_EQ(optional->data.optional.inner->kind, AK_FORM_PRIMITIVE);
   AK24_TEST_ASSERT_EQ(optional->data.optional.inner->data.primitive,
-                      AK24_ATOM_I32);
+                      AK_FORM_PRIMITIVE_I32);
 
   ak_form_free(optional);
   ak_form_free(inner);
@@ -47,7 +47,7 @@ static int test_optional_form_creation(void) {
 }
 
 static int test_repeatable_form_creation(void) {
-  ak_form_t *inner = ak_form_new_primitive(AK24_ATOM_I8);
+  ak_form_t *inner = ak_form_new_primitive(AK_FORM_PRIMITIVE_I8);
   ak_form_t *repeatable = ak_form_new_repeatable(inner);
 
   AK24_TEST_ASSERT_NOT_NULL(repeatable);
@@ -56,7 +56,7 @@ static int test_repeatable_form_creation(void) {
   AK24_TEST_ASSERT_EQ(repeatable->data.repeatable.inner->kind,
                       AK_FORM_PRIMITIVE);
   AK24_TEST_ASSERT_EQ(repeatable->data.repeatable.inner->data.primitive,
-                      AK24_ATOM_I8);
+                      AK_FORM_PRIMITIVE_I8);
 
   ak_form_free(repeatable);
   ak_form_free(inner);
@@ -64,8 +64,8 @@ static int test_repeatable_form_creation(void) {
 }
 
 static int test_struct_form_creation(void) {
-  ak_form_t *i32_form = ak_form_new_primitive(AK24_ATOM_I32);
-  ak_form_t *i64_form = ak_form_new_primitive(AK24_ATOM_I64);
+  ak_form_t *i32_form = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
+  ak_form_t *i64_form = ak_form_new_primitive(AK_FORM_PRIMITIVE_I64);
 
   list_void_t parts;
   list_init(&parts);
@@ -93,7 +93,7 @@ static int test_struct_form_creation(void) {
 }
 
 static int test_list_form_creation(void) {
-  ak_form_t *element = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *element = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   ak_form_t *list_form = ak_form_new_list(element);
 
   AK24_TEST_ASSERT_NOT_NULL(list_form);
@@ -102,7 +102,7 @@ static int test_list_form_creation(void) {
   AK24_TEST_ASSERT_EQ(list_form->data.list_form.element_type->kind,
                       AK_FORM_PRIMITIVE);
   AK24_TEST_ASSERT_EQ(list_form->data.list_form.element_type->data.primitive,
-                      AK24_ATOM_I32);
+                      AK_FORM_PRIMITIVE_I32);
 
   ak_form_free(list_form);
   ak_form_free(element);
@@ -110,17 +110,17 @@ static int test_list_form_creation(void) {
 }
 
 static int test_map_form_creation(void) {
-  ak_form_t *value_type = ak_form_new_primitive(AK24_ATOM_I32);
-  ak_form_t *map_form = ak_form_new_map(AK24_ATOM_U32, value_type);
+  ak_form_t *value_type = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
+  ak_form_t *map_form = ak_form_new_map(AK_FORM_PRIMITIVE_U32, value_type);
 
   AK24_TEST_ASSERT_NOT_NULL(map_form);
   AK24_TEST_ASSERT_EQ(map_form->kind, AK_FORM_MAP);
-  AK24_TEST_ASSERT_EQ(map_form->data.map_form.key_type, AK24_ATOM_U32);
+  AK24_TEST_ASSERT_EQ(map_form->data.map_form.key_type, AK_FORM_PRIMITIVE_U32);
   AK24_TEST_ASSERT_NEQ(map_form->data.map_form.value_type, value_type);
   AK24_TEST_ASSERT_EQ(map_form->data.map_form.value_type->kind,
                       AK_FORM_PRIMITIVE);
   AK24_TEST_ASSERT_EQ(map_form->data.map_form.value_type->data.primitive,
-                      AK24_ATOM_I32);
+                      AK_FORM_PRIMITIVE_I32);
 
   ak_form_free(map_form);
   ak_form_free(value_type);
@@ -128,7 +128,7 @@ static int test_map_form_creation(void) {
 }
 
 static int test_named_form_creation(void) {
-  ak_form_t *inner = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *inner = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   ak_form_t *named = ak_form_new_named("my_type", inner);
 
   AK24_TEST_ASSERT_NOT_NULL(named);
@@ -137,7 +137,7 @@ static int test_named_form_creation(void) {
   AK24_TEST_ASSERT_NEQ(named->data.named.actual_form, inner);
   AK24_TEST_ASSERT_EQ(named->data.named.actual_form->kind, AK_FORM_PRIMITIVE);
   AK24_TEST_ASSERT_EQ(named->data.named.actual_form->data.primitive,
-                      AK24_ATOM_I32);
+                      AK_FORM_PRIMITIVE_I32);
 
   ak_form_free(named);
   ak_form_free(inner);
@@ -146,7 +146,7 @@ static int test_named_form_creation(void) {
 
 static int test_form_registration_and_lookup(void) {
   ak_context_t *ctx = ak_context_new();
-  ak_form_t *form = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *form = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
 
   int result = ak_form_register(ctx, "my_form", form);
   AK24_TEST_ASSERT_EQ(result, 0);
@@ -160,11 +160,11 @@ static int test_form_registration_and_lookup(void) {
 
 static int test_form_lookup_with_scoping(void) {
   ak_context_t *parent = ak_context_new();
-  ak_form_t *parent_form = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *parent_form = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   ak_form_register(parent, "shared", parent_form);
 
   ak_context_t *child = ak_context_push(parent);
-  ak_form_t *child_form = ak_form_new_primitive(AK24_ATOM_F64);
+  ak_form_t *child_form = ak_form_new_primitive(AK_FORM_PRIMITIVE_F64);
   ak_form_register(child, "local", child_form);
 
   ak_form_t *found_shared = ak_form_lookup(child, "shared");
@@ -182,9 +182,9 @@ static int test_form_lookup_with_scoping(void) {
 }
 
 static int test_structural_equality_primitives(void) {
-  ak_form_t *form1 = ak_form_new_primitive(AK24_ATOM_I32);
-  ak_form_t *form2 = ak_form_new_primitive(AK24_ATOM_I32);
-  ak_form_t *form3 = ak_form_new_primitive(AK24_ATOM_F64);
+  ak_form_t *form1 = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
+  ak_form_t *form2 = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
+  ak_form_t *form3 = ak_form_new_primitive(AK_FORM_PRIMITIVE_F64);
 
   AK24_TEST_ASSERT_EQ(ak_form_is_compatible(form1, form2), 1);
   AK24_TEST_ASSERT_EQ(ak_form_is_compatible(form1, form3), 0);
@@ -196,10 +196,10 @@ static int test_structural_equality_primitives(void) {
 }
 
 static int test_structural_equality_compound(void) {
-  ak_form_t *i32_1 = ak_form_new_primitive(AK24_ATOM_I32);
-  ak_form_t *i32_2 = ak_form_new_primitive(AK24_ATOM_I32);
-  ak_form_t *f64_1 = ak_form_new_primitive(AK24_ATOM_F64);
-  ak_form_t *f64_2 = ak_form_new_primitive(AK24_ATOM_F64);
+  ak_form_t *i32_1 = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
+  ak_form_t *i32_2 = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
+  ak_form_t *f64_1 = ak_form_new_primitive(AK_FORM_PRIMITIVE_F64);
+  ak_form_t *f64_2 = ak_form_new_primitive(AK_FORM_PRIMITIVE_F64);
 
   list_void_t parts1;
   list_init(&parts1);
@@ -227,10 +227,10 @@ static int test_affect_creation(void) {
   list_void_t params;
   list_init(&params);
 
-  ak_form_t *param_form = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *param_form = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   list_push(&params, param_form);
 
-  ak_form_t *return_form = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *return_form = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
 
   ak_affect_t *affect = ak_affect_new("my_method", NULL, &params, return_form);
 
@@ -247,7 +247,7 @@ static int test_affect_creation(void) {
 }
 
 static int test_form_add_affect(void) {
-  ak_form_t *form = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *form = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   ak_affect_t *affect = ak_affect_new("method", NULL, NULL, NULL);
 
   int result = ak_form_add_affect(form, affect);
@@ -259,7 +259,7 @@ static int test_form_add_affect(void) {
 }
 
 static int test_form_get_affect(void) {
-  ak_form_t *form = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *form = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   ak_affect_t *affect = ak_affect_new("my_method", NULL, NULL, NULL);
 
   ak_form_add_affect(form, affect);
@@ -275,7 +275,7 @@ static int test_form_get_affect(void) {
 }
 
 static int test_optional_affordances(void) {
-  ak_form_t *inner = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *inner = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   ak_form_t *optional = ak_form_new_optional(inner);
 
   AK24_TEST_ASSERT_EQ(ak_form_has_affordance(optional, "is_none"), 1);
@@ -288,7 +288,7 @@ static int test_optional_affordances(void) {
 }
 
 static int test_repeatable_affordances(void) {
-  ak_form_t *inner = ak_form_new_primitive(AK24_ATOM_I8);
+  ak_form_t *inner = ak_form_new_primitive(AK_FORM_PRIMITIVE_I8);
   ak_form_t *repeatable = ak_form_new_repeatable(inner);
 
   AK24_TEST_ASSERT_EQ(ak_form_has_affordance(repeatable, "append"), 1);
@@ -303,7 +303,7 @@ static int test_repeatable_affordances(void) {
 }
 
 static int test_list_affordances(void) {
-  ak_form_t *element = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *element = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   ak_form_t *list_form = ak_form_new_list(element);
 
   AK24_TEST_ASSERT_EQ(ak_form_has_affordance(list_form, "index"), 1);
@@ -316,8 +316,8 @@ static int test_list_affordances(void) {
 }
 
 static int test_map_affordances(void) {
-  ak_form_t *value_type = ak_form_new_primitive(AK24_ATOM_I32);
-  ak_form_t *map_form = ak_form_new_map(AK24_ATOM_U32, value_type);
+  ak_form_t *value_type = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
+  ak_form_t *map_form = ak_form_new_map(AK_FORM_PRIMITIVE_U32, value_type);
 
   AK24_TEST_ASSERT_EQ(ak_form_has_affordance(map_form, "get"), 1);
   AK24_TEST_ASSERT_EQ(ak_form_has_affordance(map_form, "set"), 1);
@@ -330,7 +330,7 @@ static int test_map_affordances(void) {
 }
 
 static int test_struct_field_affordances(void) {
-  ak_form_t *pattern = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *pattern = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
 
   list_str_t fields;
   list_init(&fields);
@@ -350,7 +350,7 @@ static int test_struct_field_affordances(void) {
 }
 
 static int test_get_affordances_list(void) {
-  ak_form_t *inner = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *inner = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   ak_form_t *optional = ak_form_new_optional(inner);
 
   list_str_t affordances = ak_form_get_affordances(optional);
@@ -409,7 +409,7 @@ static void length_i32_affect(void *captured_ctx, void *invoke_args) {
 }
 
 static int test_repeatable_form_with_real_affects(void) {
-  ak_form_t *i32_form = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *i32_form = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   ak_form_t *repeatable = ak_form_new_repeatable(i32_form);
 
   ak_lambda_t *append_lambda = ak_lambda_new(append_i32_affect, NULL, NULL);
@@ -515,7 +515,7 @@ static void get_value_affect(void *captured_ctx, void *invoke_args) {
 }
 
 static int test_optional_form_with_real_affects(void) {
-  ak_form_t *i32_form = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *i32_form = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   ak_form_t *optional = ak_form_new_optional(i32_form);
 
   ak_lambda_t *is_none_lambda = ak_lambda_new(is_none_affect, NULL, NULL);
@@ -621,9 +621,9 @@ static void set_age_affect(void *captured_ctx, void *invoke_args) {
 }
 
 static int test_struct_form_with_field_affects(void) {
-  ak_form_t *i32_form = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *i32_form = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   ak_form_t *str_form =
-      ak_form_new_repeatable(ak_form_new_primitive(AK24_ATOM_I8));
+      ak_form_new_repeatable(ak_form_new_primitive(AK_FORM_PRIMITIVE_I8));
 
   list_void_t parts;
   list_init(&parts);

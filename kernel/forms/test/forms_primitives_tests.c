@@ -8,9 +8,9 @@ static int test_primitive_forms_not_singleton(void) {
 
   AK24_TEST_ASSERT_NEQ(i32_1, i32_2);
   AK24_TEST_ASSERT_EQ(i32_1->kind, AK_FORM_PRIMITIVE);
-  AK24_TEST_ASSERT_EQ(i32_1->data.primitive, AK24_ATOM_I32);
+  AK24_TEST_ASSERT_EQ(i32_1->data.primitive, AK_FORM_PRIMITIVE_I32);
   AK24_TEST_ASSERT_EQ(i32_2->kind, AK_FORM_PRIMITIVE);
-  AK24_TEST_ASSERT_EQ(i32_2->data.primitive, AK24_ATOM_I32);
+  AK24_TEST_ASSERT_EQ(i32_2->data.primitive, AK_FORM_PRIMITIVE_I32);
 
   ak_form_free(i32_1);
   ak_form_free(i32_2);
@@ -174,7 +174,7 @@ static int test_list_with_builtin_affects(void) {
 
 static int test_map_with_builtin_affects(void) {
   ak_form_t *i32_form = ak_primitive_i32();
-  ak_form_t *map_form = ak_form_new_map(AK24_ATOM_U32, i32_form);
+  ak_form_t *map_form = ak_form_new_map(AK_FORM_PRIMITIVE_U32, i32_form);
 
   ak_form_attach_builtin_affects(map_form);
 
@@ -232,7 +232,7 @@ static int test_root_form_ctx_factory(void) {
   ak_form_t *i32_1 = ak_root_form_ctx_get_i32(root);
   AK24_TEST_ASSERT_NOT_NULL(i32_1);
   AK24_TEST_ASSERT_EQ(i32_1->kind, AK_FORM_PRIMITIVE);
-  AK24_TEST_ASSERT_EQ(i32_1->data.primitive, AK24_ATOM_I32);
+  AK24_TEST_ASSERT_EQ(i32_1->data.primitive, AK_FORM_PRIMITIVE_I32);
 
   ak_form_t *i32_2 = ak_root_form_ctx_get_i32(root);
   AK24_TEST_ASSERT_EQ(i32_1, i32_2);
@@ -249,7 +249,7 @@ static int test_context_stores_forms(void) {
   ak_context_t *ctx = ak_context_new();
   AK24_TEST_ASSERT_NOT_NULL(ctx);
 
-  ak_form_t *i32 = ak_form_new_primitive(AK24_ATOM_I32);
+  ak_form_t *i32 = ak_form_new_primitive(AK_FORM_PRIMITIVE_I32);
   AK24_TEST_ASSERT_NOT_NULL(i32);
 
   int result = ak_form_register(ctx, "my_i32", i32);

@@ -46,15 +46,32 @@ Access stats via `ak_mem_get_stats()` or `ak_mem_print_stats()`. Stats are autom
 
 ## Threading
 
-When GC is enabled:
-- AK24_THREAD_CREATE -> GC_pthread_create (registers thread with GC)
-- AK24_THREAD_JOIN -> pthread_join
-- AK24_THREAD_DETACH -> pthread_detach
+The kernel provides platform-agnostic threading abstractions:
 
-When GC is disabled:
-- AK24_THREAD_CREATE -> pthread_create
-- AK24_THREAD_JOIN -> pthread_join
-- AK24_THREAD_DETACH -> pthread_detach
+**Thread Types:**
+- `AK_THREAD` - Platform-agnostic thread handle
+- `AK_MUTEX` - Platform-agnostic mutex
+- `AK_COND` - Platform-agnostic condition variable
+
+**Thread Operations:**
+- `AK24_THREAD_CREATE` - Create thread (GC-aware when GC enabled)
+- `AK24_THREAD_JOIN` - Wait for thread completion
+- `AK24_THREAD_DETACH` - Detach thread
+
+**Mutex Operations:**
+- `AK_MUTEX_INIT` - Initialize mutex
+- `AK_MUTEX_DESTROY` - Destroy mutex
+- `AK_MUTEX_LOCK` - Lock mutex
+- `AK_MUTEX_UNLOCK` - Unlock mutex
+
+**Condition Variable Operations:**
+- `AK_COND_INIT` - Initialize condition variable
+- `AK_COND_DESTROY` - Destroy condition variable
+- `AK_COND_WAIT` - Wait on condition variable
+- `AK_COND_SIGNAL` - Signal one waiting thread
+- `AK_COND_BROADCAST` - Signal all waiting threads
+
+These abstractions work on both POSIX (Linux, macOS, BSD) and Windows platforms. When GC is enabled, thread creation automatically registers threads with the garbage collector.
 
 ## Initialization
 
@@ -158,7 +175,7 @@ void *worker(void *arg) {
 int main(void) {
   ak_kernel_init();
 
-  pthread_t thread;
+  AK_THREAD thread;
   AK24_THREAD_CREATE(&thread, NULL, worker, NULL);
 
   void *result;

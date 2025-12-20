@@ -312,7 +312,9 @@ int AK_cond_broadcast(AK_COND *cond);
  * @brief Create a new thread
  *
  * Platform-agnostic thread creation.
- * Uses GC_pthread_create on POSIX with GC, standard pthread otherwise.
+ * Automatically uses GC-aware thread creation when GC is enabled,
+ * and platform-specific primitives (pthread on POSIX, Windows threads on
+ * Windows).
  *
  * @param thread Pointer to thread handle
  * @param start_routine Thread entry point

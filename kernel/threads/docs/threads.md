@@ -156,7 +156,7 @@ ak_thread_pool_enqueue(pool, task, NULL);
 ```c
 typedef struct {
     int total;
-    pthread_mutex_t mutex;
+    AK_MUTEX mutex;
 } counter_t;
 
 void task_with_counter(void *ctx, void *args) {
@@ -169,15 +169,15 @@ void on_task_done(void *ctx, void *args) {
     ak_task_state_t *state = (ak_task_state_t *)args;
 
     if (*state == AK24_TASK_STATE_COMPLETED) {
-        pthread_mutex_lock(&counter->mutex);
+        AK_MUTEX_LOCK(&counter->mutex);
         counter->total++;
-        pthread_mutex_unlock(&counter->mutex);
+        AK_MUTEX_UNLOCK(&counter->mutex);
     }
 }
 
 counter_t *counter = AK24_ALLOC(sizeof(counter_t));
 counter->total = 0;
-pthread_mutex_init(&counter->mutex, NULL);
+AK_MUTEX_INIT(&counter->mutex);
 
 for (int i = 0; i < 10; i++) {
     ak_lambda_t *task = ak_lambda_new(task_with_counter, counter, NULL);

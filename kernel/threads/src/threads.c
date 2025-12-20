@@ -1,5 +1,6 @@
 #include "threads.h"
 #include "kernel.h"
+#include "thread_platform.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +22,7 @@ struct ak_task_t {
   ak_lambda_t *task_lambda;
   ak_lambda_t *completion_callback;
   ak_task_state_t state;
-  pthread_mutex_t state_mutex;
+  ak_mutex_t state_mutex;
 };
 
 /**
@@ -34,7 +35,7 @@ struct ak_thread_pool_t {
   size_t max_queue_size;
 
   // Worker threads
-  pthread_t *workers;
+  ak_thread_t *workers;
   size_t worker_count;
   size_t active_count;
 
@@ -44,9 +45,9 @@ struct ak_thread_pool_t {
   size_t queue_size;
 
   // Synchronization
-  pthread_mutex_t mutex;
-  pthread_cond_t work_available;
-  pthread_cond_t work_complete;
+  ak_mutex_t mutex;
+  ak_cond_t work_available;
+  ak_cond_t work_complete;
 
   // State
   ak_pool_state_t state;
@@ -62,15 +63,15 @@ static int task_transition_state(ak_task_t *task, ak_task_state_t from,
     return -1;
   }
 
-  pthread_mutex_lock(&task->state_mutex);
+  ak_mutex_lock(&task->state_mutex);
 
   if (task->state != from) {
-    pthread_mutex_unlock(&task->state_mutex);
+    ak_mutex_unlock(&task->state_mutex);
     return -1;
   }
 
   task->state = to;
-  pthread_mutex_unlock(&task->state_mutex);
+  ak_mutex_unlock(&task->state_mutex);
 
   return 0;
 }
@@ -84,9 +85,9 @@ static ak_task_state_t task_get_state(ak_task_t *task) {
     return AK24_TASK_STATE_FAILED;
   }
 
-  pthread_mutex_lock(&task->state_mutex);
+  ak_mutex_lock(&task->state_mutex);
   ak_task_state_t state = task->state;
-  pthread_mutex_unlock(&task->state_mutex);
+  ak_mutex_unlock(&task->state_mutex);
 
   return state;
 }
@@ -110,7 +111,7 @@ static ak_task_t *task_new(ak_lambda_t *task_lambda,
   task->completion_callback = completion_callback;
   task->state = AK24_TASK_STATE_PENDING;
 
-  if (pthread_mutex_init(&task->state_mutex, NULL) != 0) {
+  if (ak_mutex_init(&task->state_mutex) != 0) {
     AK24_FREE(task);
     return NULL;
   }
@@ -135,7 +136,7 @@ static void task_free(ak_task_t *task) {
     ak_lambda_free(task->completion_callback);
   }
 
-  pthread_mutex_destroy(&task->state_mutex);
+  ak_mutex_destroy(&task->state_mutex);
   AK24_FREE(task);
 }
 
@@ -148,26 +149,20 @@ static void task_execute(ak_task_t *task) {
     return;
   }
 
-  // Transition to RUNNING
   if (task_transition_state(task, AK24_TASK_STATE_PENDING,
                             AK24_TASK_STATE_RUNNING) != 0) {
-    // Invalid state transition
     return;
   }
 
-  // Execute the task lambda
   ak_lambda_invoke(task->task_lambda, NULL);
 
-  // Transition to COMPLETED
   if (task_transition_state(task, AK24_TASK_STATE_RUNNING,
                             AK24_TASK_STATE_COMPLETED) != 0) {
-    // Mark as failed if we couldn't transition properly
-    pthread_mutex_lock(&task->state_mutex);
+    ak_mutex_lock(&task->state_mutex);
     task->state = AK24_TASK_STATE_FAILED;
-    pthread_mutex_unlock(&task->state_mutex);
+    ak_mutex_unlock(&task->state_mutex);
   }
 
-  // Invoke completion callback if provided
   if (task->completion_callback) {
     ak_task_state_t final_state = task_get_state(task);
     ak_lambda_invoke(task->completion_callback, &final_state);
@@ -205,16 +200,16 @@ static void *worker_thread(void *arg) {
   ak_thread_pool_t *pool = (ak_thread_pool_t *)arg;
 
   while (1) {
-    pthread_mutex_lock(&pool->mutex);
+    ak_mutex_lock(&pool->mutex);
 
     // Wait for work or shutdown signal
     while (pool->state == AK24_POOL_STATE_RUNNING && pool->queue_size == 0) {
-      pthread_cond_wait(&pool->work_available, &pool->mutex);
+      ak_cond_wait(&pool->work_available, &pool->mutex);
     }
 
     // Check if we should exit
     if (pool->state != AK24_POOL_STATE_RUNNING && pool->queue_size == 0) {
-      pthread_mutex_unlock(&pool->mutex);
+      ak_mutex_unlock(&pool->mutex);
       break;
     }
 
@@ -222,7 +217,7 @@ static void *worker_thread(void *arg) {
     ak_task_t *task = pool_dequeue_task(pool);
     pool->active_count++;
 
-    pthread_mutex_unlock(&pool->mutex);
+    ak_mutex_unlock(&pool->mutex);
 
     // Execute task outside of lock
     if (task) {
@@ -231,15 +226,15 @@ static void *worker_thread(void *arg) {
     }
 
     // Mark as done
-    pthread_mutex_lock(&pool->mutex);
+    ak_mutex_lock(&pool->mutex);
     pool->active_count--;
 
     // Signal if all work is complete
     if (pool->queue_size == 0 && pool->active_count == 0) {
-      pthread_cond_broadcast(&pool->work_complete);
+      ak_cond_broadcast(&pool->work_complete);
     }
 
-    pthread_mutex_unlock(&pool->mutex);
+    ak_mutex_unlock(&pool->mutex);
   }
 
   return NULL;
@@ -278,30 +273,30 @@ ak_thread_pool_t *ak_thread_pool_new(const ak_thread_pool_config_t *config) {
   pool->state = AK24_POOL_STATE_INITIALIZING;
 
   // Initialize synchronization primitives
-  if (pthread_mutex_init(&pool->mutex, NULL) != 0) {
+  if (ak_mutex_init(&pool->mutex) != 0) {
     AK24_FREE(pool);
     return NULL;
   }
 
-  if (pthread_cond_init(&pool->work_available, NULL) != 0) {
-    pthread_mutex_destroy(&pool->mutex);
+  if (ak_cond_init(&pool->work_available) != 0) {
+    ak_mutex_destroy(&pool->mutex);
     AK24_FREE(pool);
     return NULL;
   }
 
-  if (pthread_cond_init(&pool->work_complete, NULL) != 0) {
-    pthread_cond_destroy(&pool->work_available);
-    pthread_mutex_destroy(&pool->mutex);
+  if (ak_cond_init(&pool->work_complete) != 0) {
+    ak_cond_destroy(&pool->work_available);
+    ak_mutex_destroy(&pool->mutex);
     AK24_FREE(pool);
     return NULL;
   }
 
   // Allocate worker threads
-  pool->workers = AK24_ALLOC(sizeof(pthread_t) * pool->worker_count);
+  pool->workers = AK24_ALLOC(sizeof(ak_thread_t) * pool->worker_count);
   if (!pool->workers) {
-    pthread_cond_destroy(&pool->work_complete);
-    pthread_cond_destroy(&pool->work_available);
-    pthread_mutex_destroy(&pool->mutex);
+    ak_cond_destroy(&pool->work_complete);
+    ak_cond_destroy(&pool->work_available);
+    ak_mutex_destroy(&pool->mutex);
     AK24_FREE(pool);
     return NULL;
   }
@@ -309,19 +304,19 @@ ak_thread_pool_t *ak_thread_pool_new(const ak_thread_pool_config_t *config) {
   // Start worker threads
   pool->state = AK24_POOL_STATE_RUNNING;
   for (size_t i = 0; i < pool->worker_count; i++) {
-    if (AK24_THREAD_CREATE(&pool->workers[i], NULL, worker_thread, pool) != 0) {
-      // Cleanup on failure
+    if (ak_thread_create(&pool->workers[i], worker_thread, pool) != 0) {
+
       pool->state = AK24_POOL_STATE_SHUTTING_DOWN;
-      pthread_cond_broadcast(&pool->work_available);
+      ak_cond_broadcast(&pool->work_available);
 
       for (size_t j = 0; j < i; j++) {
-        AK24_THREAD_JOIN(pool->workers[j], NULL);
+        ak_thread_join(pool->workers[j]);
       }
 
       AK24_FREE(pool->workers);
-      pthread_cond_destroy(&pool->work_complete);
-      pthread_cond_destroy(&pool->work_available);
-      pthread_mutex_destroy(&pool->mutex);
+      ak_cond_destroy(&pool->work_complete);
+      ak_cond_destroy(&pool->work_available);
+      ak_mutex_destroy(&pool->mutex);
       AK24_FREE(pool);
       return NULL;
     }
@@ -336,23 +331,23 @@ int ak_thread_pool_enqueue(ak_thread_pool_t *pool, ak_lambda_t *task_lambda,
     return -1;
   }
 
-  pthread_mutex_lock(&pool->mutex);
+  ak_mutex_lock(&pool->mutex);
 
   if (pool->state != AK24_POOL_STATE_RUNNING) {
-    pthread_mutex_unlock(&pool->mutex);
+    ak_mutex_unlock(&pool->mutex);
     return -1;
   }
 
   // Check queue size limit
   if (pool->max_queue_size > 0 && pool->queue_size >= pool->max_queue_size) {
-    pthread_mutex_unlock(&pool->mutex);
+    ak_mutex_unlock(&pool->mutex);
     return -1;
   }
 
   // Create task
   ak_task_t *task = task_new(task_lambda, completion_callback);
   if (!task) {
-    pthread_mutex_unlock(&pool->mutex);
+    ak_mutex_unlock(&pool->mutex);
     return -1;
   }
 
@@ -360,7 +355,7 @@ int ak_thread_pool_enqueue(ak_thread_pool_t *pool, ak_lambda_t *task_lambda,
   ak_task_node_t *node = AK24_ALLOC(sizeof(ak_task_node_t));
   if (!node) {
     task_free(task);
-    pthread_mutex_unlock(&pool->mutex);
+    ak_mutex_unlock(&pool->mutex);
     return -1;
   }
 
@@ -377,8 +372,8 @@ int ak_thread_pool_enqueue(ak_thread_pool_t *pool, ak_lambda_t *task_lambda,
   pool->queue_size++;
 
   // Signal worker threads
-  pthread_cond_signal(&pool->work_available);
-  pthread_mutex_unlock(&pool->mutex);
+  ak_cond_signal(&pool->work_available);
+  ak_mutex_unlock(&pool->mutex);
 
   return 0;
 }
@@ -388,13 +383,13 @@ int ak_thread_pool_wait(ak_thread_pool_t *pool) {
     return -1;
   }
 
-  pthread_mutex_lock(&pool->mutex);
+  ak_mutex_lock(&pool->mutex);
 
   while (pool->queue_size > 0 || pool->active_count > 0) {
-    pthread_cond_wait(&pool->work_complete, &pool->mutex);
+    ak_cond_wait(&pool->work_complete, &pool->mutex);
   }
 
-  pthread_mutex_unlock(&pool->mutex);
+  ak_mutex_unlock(&pool->mutex);
 
   return 0;
 }
@@ -404,9 +399,9 @@ size_t ak_thread_pool_pending_count(ak_thread_pool_t *pool) {
     return 0;
   }
 
-  pthread_mutex_lock(&pool->mutex);
+  ak_mutex_lock(&pool->mutex);
   size_t count = pool->queue_size;
-  pthread_mutex_unlock(&pool->mutex);
+  ak_mutex_unlock(&pool->mutex);
 
   return count;
 }
@@ -416,9 +411,9 @@ size_t ak_thread_pool_active_count(ak_thread_pool_t *pool) {
     return 0;
   }
 
-  pthread_mutex_lock(&pool->mutex);
+  ak_mutex_lock(&pool->mutex);
   size_t count = pool->active_count;
-  pthread_mutex_unlock(&pool->mutex);
+  ak_mutex_unlock(&pool->mutex);
 
   return count;
 }
@@ -428,9 +423,9 @@ ak_pool_state_t ak_thread_pool_get_state(ak_thread_pool_t *pool) {
     return AK24_POOL_STATE_TERMINATED;
   }
 
-  pthread_mutex_lock(&pool->mutex);
+  ak_mutex_lock(&pool->mutex);
   ak_pool_state_t state = pool->state;
-  pthread_mutex_unlock(&pool->mutex);
+  ak_mutex_unlock(&pool->mutex);
 
   return state;
 }
@@ -441,20 +436,20 @@ void ak_thread_pool_free(ak_thread_pool_t *pool) {
   }
 
   // Signal shutdown
-  pthread_mutex_lock(&pool->mutex);
+  ak_mutex_lock(&pool->mutex);
   pool->state = AK24_POOL_STATE_SHUTTING_DOWN;
-  pthread_cond_broadcast(&pool->work_available);
-  pthread_mutex_unlock(&pool->mutex);
+  ak_cond_broadcast(&pool->work_available);
+  ak_mutex_unlock(&pool->mutex);
 
   // Wait for all workers to finish
   for (size_t i = 0; i < pool->worker_count; i++) {
-    AK24_THREAD_JOIN(pool->workers[i], NULL);
+    ak_thread_join(pool->workers[i]);
   }
 
   // Mark as terminated
-  pthread_mutex_lock(&pool->mutex);
+  ak_mutex_lock(&pool->mutex);
   pool->state = AK24_POOL_STATE_TERMINATED;
-  pthread_mutex_unlock(&pool->mutex);
+  ak_mutex_unlock(&pool->mutex);
 
   // Clean up remaining tasks in queue
   while (pool->queue_head) {
@@ -464,11 +459,10 @@ void ak_thread_pool_free(ak_thread_pool_t *pool) {
     }
   }
 
-  // Free resources
   AK24_FREE(pool->workers);
-  pthread_cond_destroy(&pool->work_complete);
-  pthread_cond_destroy(&pool->work_available);
-  pthread_mutex_destroy(&pool->mutex);
+  ak_cond_destroy(&pool->work_complete);
+  ak_cond_destroy(&pool->work_available);
+  ak_mutex_destroy(&pool->mutex);
   AK24_FREE(pool);
 }
 

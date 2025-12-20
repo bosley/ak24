@@ -40,6 +40,23 @@ file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/log/src/*.c
 )
 
+# Platform-specific threading sources
+if(WIN32)
+    file(GLOB THREADS_PLATFORM_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/win/*.c
+    )
+else()
+    file(GLOB THREADS_PLATFORM_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/nix/*.c
+    )
+endif()
+
+# Exclude platform-specific directories from main glob
+list(FILTER KERNEL_SOURCES EXCLUDE REGEX ".*/src/(nix|win)/.*")
+
+# Add platform-specific sources
+list(APPEND KERNEL_SOURCES ${THREADS_PLATFORM_SOURCES})
+
 file(GLOB_RECURSE KERNEL_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/map/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/buffer/test/*.c
@@ -103,6 +120,13 @@ if(AK24_GC_ENABLED)
             -Wl,-w
         )
     endif()
+endif()
+
+# Platform-specific threading libraries
+if(UNIX OR APPLE)
+    target_link_libraries(ak24_kernel PUBLIC pthread)
+elseif(WIN32)
+    # Windows threading is built into kernel32.lib (linked by default)
 endif()
 
 set_target_properties(ak24_kernel PROPERTIES

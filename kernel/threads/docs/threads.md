@@ -2,6 +2,17 @@
 
 The threads module provides a thread pool system for managing concurrent execution of lambda-based tasks. It supports configurable worker threads, task queuing, completion callbacks, and safe lifecycle management with strict state validation.
 
+## Platform Support
+
+When I initially made the thread pool the focus was nix only. I figure with large langauage models helping (as they are now as  )
+
+The thread pool is **cross-platform ready** with clean separation:
+
+- ✅ **POSIX** (Linux, macOS, BSD) - **Fully implemented and tested**
+- 🔧 **Windows** - **Structure prepared, implementation pending**
+
+Platform-specific code is isolated in `src/nix/` and `src/win/` subdirectories, with a clean abstraction layer that allows the core thread pool implementation to remain platform-agnostic.
+
 ## Core Concept
 
 A thread pool is a concurrent execution environment that:
@@ -250,6 +261,43 @@ This will:
 5. Free the pool
 
 **Important**: Do not use the pool after calling `ak_thread_pool_free()`.
+
+## Platform Abstraction Layer
+
+The thread pool uses a clean abstraction for platform-specific primitives:
+
+**Abstracted Types** (defined in [thread_platform.h](../include/thread_platform.h)):
+- `ak_mutex_t` - Mutex for mutual exclusion
+- `ak_cond_t` - Condition variable for signaling
+- `ak_thread_t` - Thread handle
+
+**Abstracted Operations**:
+- `ak_mutex_init/destroy/lock/unlock` - Mutex operations
+- `ak_cond_init/destroy/wait/signal/broadcast` - Condition variable operations
+- `ak_thread_create/join` - Thread lifecycle
+
+**Implementation Structure**:
+```
+kernel/threads/src/
+├── threads.c              # Platform-agnostic core implementation
+├── nix/
+│   └── thread_platform.c  # POSIX implementation (pthread)
+└── win/
+    └── thread_platform.c  # Windows implementation (WinAPI)
+```
+
+The CMake build system automatically selects the appropriate platform implementation based on the target operating system.
+
+### Adding Windows Support
+
+The Windows implementation is currently **stubbed** with `NOT_IMPLEMENTED()` placeholders. To complete Windows support:
+
+1. Implement mutex operations using Windows Critical Sections or SRW locks
+2. Implement condition variables using Windows Condition Variables
+3. Implement thread creation/join using `CreateThread` and `WaitForSingleObject`
+4. Test on Windows to ensure behavior matches POSIX implementation
+
+Refer to [src/win/thread_platform.c](../src/win/thread_platform.c) for detailed TODO comments and Windows API references.
 
 ## Best Practices
 

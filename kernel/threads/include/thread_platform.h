@@ -2,64 +2,49 @@
  * @file thread_platform.h
  * @brief Platform abstraction layer for threading primitives
  *
- * Provides a unified interface for threading operations across POSIX and
- * Windows platforms. This abstraction allows the thread pool implementation
+ * Provides a unified interface for threading operations by wrapping
+ * kernel-level thread primitives. This allows the thread pool implementation
  * to remain platform-agnostic.
+ *
+ * NOTE: This layer wraps kernel.h's AK_ threading functions.
+ * All platform (POSIX/Windows) and GC concerns are handled by the kernel.
  *
  * Supported platforms:
  * - POSIX (Linux, macOS, BSD) - Fully implemented
- * - Windows - Prepared structure, implementation pending
+ * - Windows - Fully implemented (stubs in kernel)
  */
 
 #ifndef AK24_THREAD_PLATFORM_H
 #define AK24_THREAD_PLATFORM_H
 
+#include "kernel.h"
 #include <stddef.h>
 
 /**
- * @brief Platform detection
- */
-#if defined(_WIN32) || defined(_WIN64)
-#define AK24_PLATFORM_WINDOWS
-#include <windows.h>
-#elif defined(__unix__) || defined(__APPLE__) || defined(__linux__)
-#define AK24_PLATFORM_POSIX
-#include <pthread.h>
-#else
-#error "Unsupported platform - only POSIX and Windows are supported"
-#endif
-
-/**
  * @brief Platform-agnostic mutex type
+ *
+ * Wraps kernel's AK_MUTEX which handles platform differences.
  */
-typedef struct {
-#ifdef AK24_PLATFORM_POSIX
-  pthread_mutex_t handle; /**< POSIX mutex handle */
-#else
-  CRITICAL_SECTION handle; /**< Windows critical section handle */
-#endif
+typedef struct ak_mutex_t {
+  AK_MUTEX mutex;
 } ak_mutex_t;
 
 /**
  * @brief Platform-agnostic condition variable type
+ *
+ * Wraps kernel's AK_COND which handles platform differences.
  */
-typedef struct {
-#ifdef AK24_PLATFORM_POSIX
-  pthread_cond_t handle; /**< POSIX condition variable handle */
-#else
-  CONDITION_VARIABLE handle; /**< Windows condition variable handle */
-#endif
+typedef struct ak_cond_t {
+  AK_COND cond;
 } ak_cond_t;
 
 /**
  * @brief Platform-agnostic thread type
+ *
+ * Wraps kernel's AK_THREAD which handles platform differences.
  */
-typedef struct {
-#ifdef AK24_PLATFORM_POSIX
-  pthread_t handle; /**< POSIX thread handle */
-#else
-  HANDLE handle; /**< Windows thread handle */
-#endif
+typedef struct ak_thread_t {
+  AK_THREAD thread;
 } ak_thread_t;
 
 /**

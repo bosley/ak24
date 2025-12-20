@@ -238,8 +238,8 @@ static int test_arbuff_concurrent_access(void) {
     *all_values[i] = i;
   }
 
-  pthread_t producers[NUM_PRODUCERS];
-  pthread_t consumers[NUM_CONSUMERS];
+  AK_THREAD producers[NUM_PRODUCERS];
+  AK_THREAD consumers[NUM_CONSUMERS];
   thread_data_t producer_data[NUM_PRODUCERS];
   thread_data_t consumer_data[NUM_CONSUMERS];
 

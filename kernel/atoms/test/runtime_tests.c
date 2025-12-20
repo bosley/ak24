@@ -294,8 +294,8 @@ static int test_atom_concurrent_access(void) {
 #define NUM_READERS 2
 #define ITERATIONS 50
 
-  pthread_t writers[NUM_WRITERS];
-  pthread_t readers[NUM_READERS];
+  AK_THREAD writers[NUM_WRITERS];
+  AK_THREAD readers[NUM_READERS];
   thread_data_t writer_data[NUM_WRITERS];
   thread_data_t reader_data[NUM_READERS];
 

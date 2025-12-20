@@ -1,11 +1,19 @@
 #include "kernel.h"
-#include <pthread.h>
+#include "thread_platform.h"
 #include <signal.h>
 #include <stdio.h>
 
 #if AK24_GC_ENABLED
 #include <sched.h>
 #include <unistd.h>
+#define GC_THREADS 1
+#include <gc.h>
+#endif
+
+#ifdef AK24_PLATFORM_POSIX
+#include <pthread.h>
+#elif defined(AK24_PLATFORM_WINDOWS)
+#include <windows.h>
 #endif
 
 static list_void_t shutdown_lambdas;
@@ -21,7 +29,7 @@ typedef struct {
 
 static list_void_t signal_handlers;
 static int signal_handlers_initialized = 0;
-static pthread_mutex_t signal_mutex = PTHREAD_MUTEX_INITIALIZER;
+static AK_MUTEX signal_mutex = AK_MUTEX_INITIALIZER;
 
 // Forward declarations for signal handling
 static void ak_signal_handlers_init(void);
@@ -30,7 +38,7 @@ static void ak_signal_dispatch(int signum);
 
 #if AK24_BUILD_DEBUG_MEMORY
 
-static pthread_mutex_t mem_stats_mutex = PTHREAD_MUTEX_INITIALIZER;
+static AK_MUTEX mem_stats_mutex = AK_MUTEX_INITIALIZER;
 static ak_memory_stats_t mem_stats = {0};
 
 #if AK24_GC_ENABLED
@@ -40,14 +48,14 @@ void *ak_mem_alloc_tracked(size_t size, const char *file, int line) {
   (void)line;
   void *ptr = GC_MALLOC(size);
   if (ptr) {
-    pthread_mutex_lock(&mem_stats_mutex);
+    AK_MUTEX_LOCK(&mem_stats_mutex);
     mem_stats.total_allocations++;
     mem_stats.bytes_allocated += size;
     mem_stats.current_bytes += size;
     if (mem_stats.current_bytes > mem_stats.peak_bytes) {
       mem_stats.peak_bytes = mem_stats.current_bytes;
     }
-    pthread_mutex_unlock(&mem_stats_mutex);
+    AK_MUTEX_UNLOCK(&mem_stats_mutex);
   }
   return ptr;
 }
@@ -57,14 +65,14 @@ void *ak_mem_alloc_atomic_tracked(size_t size, const char *file, int line) {
   (void)line;
   void *ptr = GC_MALLOC_ATOMIC(size);
   if (ptr) {
-    pthread_mutex_lock(&mem_stats_mutex);
+    AK_MUTEX_LOCK(&mem_stats_mutex);
     mem_stats.total_allocations++;
     mem_stats.bytes_allocated += size;
     mem_stats.current_bytes += size;
     if (mem_stats.current_bytes > mem_stats.peak_bytes) {
       mem_stats.peak_bytes = mem_stats.current_bytes;
     }
-    pthread_mutex_unlock(&mem_stats_mutex);
+    AK_MUTEX_UNLOCK(&mem_stats_mutex);
   }
   return ptr;
 }
@@ -75,14 +83,14 @@ void *ak_mem_realloc_tracked(void *ptr, size_t size, const char *file,
   (void)line;
   void *new_ptr = GC_REALLOC(ptr, size);
   if (new_ptr) {
-    pthread_mutex_lock(&mem_stats_mutex);
+    AK_MUTEX_LOCK(&mem_stats_mutex);
     mem_stats.total_reallocs++;
     mem_stats.bytes_allocated += size;
     mem_stats.current_bytes += size;
     if (mem_stats.current_bytes > mem_stats.peak_bytes) {
       mem_stats.peak_bytes = mem_stats.current_bytes;
     }
-    pthread_mutex_unlock(&mem_stats_mutex);
+    AK_MUTEX_UNLOCK(&mem_stats_mutex);
   }
   return new_ptr;
 }
@@ -91,9 +99,9 @@ void ak_mem_free_tracked(void *ptr, const char *file, int line) {
   (void)file;
   (void)line;
   if (ptr) {
-    pthread_mutex_lock(&mem_stats_mutex);
+    AK_MUTEX_LOCK(&mem_stats_mutex);
     mem_stats.total_frees++;
-    pthread_mutex_unlock(&mem_stats_mutex);
+    AK_MUTEX_UNLOCK(&mem_stats_mutex);
     GC_FREE(ptr);
   }
 }
@@ -105,14 +113,14 @@ void *ak_mem_alloc_tracked(size_t size, const char *file, int line) {
   (void)line;
   void *ptr = malloc(size);
   if (ptr) {
-    pthread_mutex_lock(&mem_stats_mutex);
+    AK_MUTEX_LOCK(&mem_stats_mutex);
     mem_stats.total_allocations++;
     mem_stats.bytes_allocated += size;
     mem_stats.current_bytes += size;
     if (mem_stats.current_bytes > mem_stats.peak_bytes) {
       mem_stats.peak_bytes = mem_stats.current_bytes;
     }
-    pthread_mutex_unlock(&mem_stats_mutex);
+    AK_MUTEX_UNLOCK(&mem_stats_mutex);
   }
   return ptr;
 }
@@ -122,14 +130,14 @@ void *ak_mem_alloc_atomic_tracked(size_t size, const char *file, int line) {
   (void)line;
   void *ptr = malloc(size);
   if (ptr) {
-    pthread_mutex_lock(&mem_stats_mutex);
+    AK_MUTEX_LOCK(&mem_stats_mutex);
     mem_stats.total_allocations++;
     mem_stats.bytes_allocated += size;
     mem_stats.current_bytes += size;
     if (mem_stats.current_bytes > mem_stats.peak_bytes) {
       mem_stats.peak_bytes = mem_stats.current_bytes;
     }
-    pthread_mutex_unlock(&mem_stats_mutex);
+    AK_MUTEX_UNLOCK(&mem_stats_mutex);
   }
   return ptr;
 }
@@ -140,14 +148,14 @@ void *ak_mem_realloc_tracked(void *ptr, size_t size, const char *file,
   (void)line;
   void *new_ptr = realloc(ptr, size);
   if (new_ptr) {
-    pthread_mutex_lock(&mem_stats_mutex);
+    AK_MUTEX_LOCK(&mem_stats_mutex);
     mem_stats.total_reallocs++;
     mem_stats.bytes_allocated += size;
     mem_stats.current_bytes += size;
     if (mem_stats.current_bytes > mem_stats.peak_bytes) {
       mem_stats.peak_bytes = mem_stats.current_bytes;
     }
-    pthread_mutex_unlock(&mem_stats_mutex);
+    AK_MUTEX_UNLOCK(&mem_stats_mutex);
   }
   return new_ptr;
 }
@@ -156,9 +164,9 @@ void ak_mem_free_tracked(void *ptr, const char *file, int line) {
   (void)file;
   (void)line;
   if (ptr) {
-    pthread_mutex_lock(&mem_stats_mutex);
+    AK_MUTEX_LOCK(&mem_stats_mutex);
     mem_stats.total_frees++;
-    pthread_mutex_unlock(&mem_stats_mutex);
+    AK_MUTEX_UNLOCK(&mem_stats_mutex);
     free(ptr);
   }
 }
@@ -166,9 +174,9 @@ void ak_mem_free_tracked(void *ptr, const char *file, int line) {
 #endif
 
 ak_memory_stats_t ak_mem_get_stats(void) {
-  pthread_mutex_lock(&mem_stats_mutex);
+  AK_MUTEX_LOCK(&mem_stats_mutex);
   ak_memory_stats_t stats = mem_stats;
-  pthread_mutex_unlock(&mem_stats_mutex);
+  AK_MUTEX_UNLOCK(&mem_stats_mutex);
   return stats;
 }
 
@@ -274,10 +282,10 @@ list_str_t ak_args_to_list(int argc, char **argv) {
 // Signal handling implementation
 
 static void ak_signal_dispatch(int signum) {
-  pthread_mutex_lock(&signal_mutex);
+  AK_MUTEX_LOCK(&signal_mutex);
 
   if (!signal_handlers_initialized) {
-    pthread_mutex_unlock(&signal_mutex);
+    AK_MUTEX_UNLOCK(&signal_mutex);
     return;
   }
 
@@ -295,7 +303,7 @@ static void ak_signal_dispatch(int signum) {
     }
   }
 
-  pthread_mutex_unlock(&signal_mutex);
+  AK_MUTEX_UNLOCK(&signal_mutex);
 }
 
 void ak_register_signal_handler(int signum, ak_lambda_t *handler) {
@@ -303,7 +311,7 @@ void ak_register_signal_handler(int signum, ak_lambda_t *handler) {
     return;
   }
 
-  pthread_mutex_lock(&signal_mutex);
+  AK_MUTEX_LOCK(&signal_mutex);
 
   // Check if handler already exists for this signal
   list_iter_t iter = list_iter(&signal_handlers);
@@ -313,7 +321,7 @@ void ak_register_signal_handler(int signum, ak_lambda_t *handler) {
     if (entry && entry->signum == signum) {
       // Update existing handler
       entry->handler = handler;
-      pthread_mutex_unlock(&signal_mutex);
+      AK_MUTEX_UNLOCK(&signal_mutex);
       return;
     }
   }
@@ -322,7 +330,7 @@ void ak_register_signal_handler(int signum, ak_lambda_t *handler) {
   ak_signal_handler_entry_t *entry =
       AK24_ALLOC(sizeof(ak_signal_handler_entry_t));
   if (!entry) {
-    pthread_mutex_unlock(&signal_mutex);
+    AK_MUTEX_UNLOCK(&signal_mutex);
     return;
   }
 
@@ -339,14 +347,14 @@ void ak_register_signal_handler(int signum, ak_lambda_t *handler) {
     list_push(&signal_handlers, entry);
   }
 
-  pthread_mutex_unlock(&signal_mutex);
+  AK_MUTEX_UNLOCK(&signal_mutex);
 }
 
 void ak_unregister_signal_handler(int signum) {
-  pthread_mutex_lock(&signal_mutex);
+  AK_MUTEX_LOCK(&signal_mutex);
 
   if (!signal_handlers_initialized) {
-    pthread_mutex_unlock(&signal_mutex);
+    AK_MUTEX_UNLOCK(&signal_mutex);
     return;
   }
 
@@ -370,7 +378,7 @@ void ak_unregister_signal_handler(int signum) {
     list_remove_(&signal_handlers.base, index);
   }
 
-  pthread_mutex_unlock(&signal_mutex);
+  AK_MUTEX_UNLOCK(&signal_mutex);
 }
 
 static void ak_signal_handlers_init(void) {
@@ -383,7 +391,7 @@ static void ak_signal_handlers_deinit(void) {
     return;
   }
 
-  pthread_mutex_lock(&signal_mutex);
+  AK_MUTEX_LOCK(&signal_mutex);
 
   // Restore all signal handlers
   list_iter_t iter = list_iter(&signal_handlers);
@@ -398,5 +406,187 @@ static void ak_signal_handlers_deinit(void) {
   list_deinit(&signal_handlers);
   signal_handlers_initialized = 0;
 
-  pthread_mutex_unlock(&signal_mutex);
+  AK_MUTEX_UNLOCK(&signal_mutex);
+}
+
+// Mutex implementations
+
+int AK_mutex_init(AK_MUTEX *mutex) {
+  if (!mutex) {
+    return -1;
+  }
+#ifdef AK24_PLATFORM_POSIX
+  return pthread_mutex_init(&mutex->handle, NULL);
+#elif defined(AK24_PLATFORM_WINDOWS)
+  InitializeCriticalSection(&mutex->handle);
+  return 0;
+#else
+  #error "Unsupported platform"
+#endif
+}
+
+int AK_mutex_destroy(AK_MUTEX *mutex) {
+  if (!mutex) {
+    return -1;
+  }
+#ifdef AK24_PLATFORM_POSIX
+  return pthread_mutex_destroy(&mutex->handle);
+#elif defined(AK24_PLATFORM_WINDOWS)
+  DeleteCriticalSection(&mutex->handle);
+  return 0;
+#else
+  #error "Unsupported platform"
+#endif
+}
+
+int AK_mutex_lock(AK_MUTEX *mutex) {
+  if (!mutex) {
+    return -1;
+  }
+#ifdef AK24_PLATFORM_POSIX
+  return pthread_mutex_lock(&mutex->handle);
+#elif defined(AK24_PLATFORM_WINDOWS)
+  EnterCriticalSection(&mutex->handle);
+  return 0;
+#else
+  #error "Unsupported platform"
+#endif
+}
+
+int AK_mutex_unlock(AK_MUTEX *mutex) {
+  if (!mutex) {
+    return -1;
+  }
+#ifdef AK24_PLATFORM_POSIX
+  return pthread_mutex_unlock(&mutex->handle);
+#elif defined(AK24_PLATFORM_WINDOWS)
+  LeaveCriticalSection(&mutex->handle);
+  return 0;
+#else
+  #error "Unsupported platform"
+#endif
+}
+
+// Condition variable implementations
+
+int AK_cond_init(AK_COND *cond) {
+  if (!cond) {
+    return -1;
+  }
+#ifdef AK24_PLATFORM_POSIX
+  return pthread_cond_init(&cond->handle, NULL);
+#elif defined(AK24_PLATFORM_WINDOWS)
+  InitializeConditionVariable(&cond->handle);
+  return 0;
+#else
+  #error "Unsupported platform"
+#endif
+}
+
+int AK_cond_destroy(AK_COND *cond) {
+  if (!cond) {
+    return -1;
+  }
+#ifdef AK24_PLATFORM_POSIX
+  return pthread_cond_destroy(&cond->handle);
+#elif defined(AK24_PLATFORM_WINDOWS)
+  // Windows condition variables don't need explicit destruction
+  return 0;
+#else
+  #error "Unsupported platform"
+#endif
+}
+
+int AK_cond_wait(AK_COND *cond, AK_MUTEX *mutex) {
+  if (!cond || !mutex) {
+    return -1;
+  }
+#ifdef AK24_PLATFORM_POSIX
+  return pthread_cond_wait(&cond->handle, &mutex->handle);
+#elif defined(AK24_PLATFORM_WINDOWS)
+  return SleepConditionVariableCS(&cond->handle, &mutex->handle, INFINITE) ? 0 : -1;
+#else
+  #error "Unsupported platform"
+#endif
+}
+
+int AK_cond_signal(AK_COND *cond) {
+  if (!cond) {
+    return -1;
+  }
+#ifdef AK24_PLATFORM_POSIX
+  return pthread_cond_signal(&cond->handle);
+#elif defined(AK24_PLATFORM_WINDOWS)
+  WakeConditionVariable(&cond->handle);
+  return 0;
+#else
+  #error "Unsupported platform"
+#endif
+}
+
+int AK_cond_broadcast(AK_COND *cond) {
+  if (!cond) {
+    return -1;
+  }
+#ifdef AK24_PLATFORM_POSIX
+  return pthread_cond_broadcast(&cond->handle);
+#elif defined(AK24_PLATFORM_WINDOWS)
+  WakeAllConditionVariable(&cond->handle);
+  return 0;
+#else
+  #error "Unsupported platform"
+#endif
+}
+
+// Thread abstraction implementations
+// These provide platform-agnostic threading primitives that handle
+// both GC/non-GC builds and POSIX/Windows platforms
+
+int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
+                     void *arg) {
+  if (!thread || !start_routine) {
+    return -1;
+  }
+
+#ifdef AK24_PLATFORM_POSIX
+  #if AK24_GC_ENABLED
+    // GC-aware thread creation on POSIX
+    return GC_pthread_create(&thread->handle, NULL, start_routine, arg);
+  #else
+    // Standard pthread creation on POSIX
+    return pthread_create(&thread->handle, NULL, start_routine, arg);
+  #endif
+#elif defined(AK24_PLATFORM_WINDOWS)
+  // TODO: Windows CreateThread implementation
+  (void)thread;
+  (void)start_routine;
+  (void)arg;
+  return -1; // Not yet implemented
+#else
+  #error "Unsupported platform"
+#endif
+}
+
+int AK_THREAD_JOIN(AK_THREAD thread) {
+#ifdef AK24_PLATFORM_POSIX
+  return pthread_join(thread.handle, NULL);
+#elif defined(AK24_PLATFORM_WINDOWS)
+  // TODO: Windows WaitForSingleObject implementation
+  (void)thread;
+  return -1; // Not yet implemented
+#else
+  #error "Unsupported platform"
+#endif
+}
+
+int AK_THREAD_DETACH(AK_THREAD thread) {
+#ifdef AK24_PLATFORM_POSIX
+  return pthread_detach(thread.handle);
+#elif defined(AK24_PLATFORM_WINDOWS)
+  // TODO: Windows CloseHandle implementation
+  (void)thread;
+  return -1; // Not yet implemented
+#else
+  #error "Unsupported platform"
+#endif
 }

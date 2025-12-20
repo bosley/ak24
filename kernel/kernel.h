@@ -34,11 +34,146 @@
 #include "log.h"
 #include "map.h"
 #include "scanner.h"
-#include "threads.h"
 
-#include <pthread.h>
 #include <stddef.h>
 #include <time.h>
+
+/**
+ * @brief Platform detection
+ */
+#if defined(_WIN32) || defined(_WIN64)
+#define AK24_PLATFORM_WINDOWS
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#elif defined(__unix__) || defined(__APPLE__) || defined(__linux__)
+#define AK24_PLATFORM_POSIX
+#include <pthread.h>
+#else
+#error "Unsupported platform - only POSIX and Windows are supported"
+#endif
+
+/**
+ * @brief Platform-agnostic mutex type
+ *
+ * Wrapper around platform-specific mutex implementation.
+ * On POSIX: pthread_mutex_t, on Windows: CRITICAL_SECTION
+ */
+typedef struct {
+#ifdef AK24_PLATFORM_POSIX
+  pthread_mutex_t handle;
+#elif defined(AK24_PLATFORM_WINDOWS)
+  CRITICAL_SECTION handle;
+#endif
+} AK_MUTEX;
+
+/**
+ * @brief Platform-agnostic condition variable type
+ *
+ * Wrapper around platform-specific condition variable.
+ * On POSIX: pthread_cond_t, on Windows: CONDITION_VARIABLE
+ */
+typedef struct {
+#ifdef AK24_PLATFORM_POSIX
+  pthread_cond_t handle;
+#elif defined(AK24_PLATFORM_WINDOWS)
+  CONDITION_VARIABLE handle;
+#endif
+} AK_COND;
+
+/**
+ * @brief Platform-agnostic thread type
+ *
+ * Wrapper around platform-specific thread handle.
+ * On POSIX: pthread_t, on Windows: HANDLE
+ */
+typedef struct {
+#ifdef AK24_PLATFORM_POSIX
+  pthread_t handle;
+#elif defined(AK24_PLATFORM_WINDOWS)
+  HANDLE handle;
+#endif
+} AK_THREAD;
+
+/**
+ * @def AK_MUTEX_INITIALIZER
+ * @brief Static mutex initializer
+ *
+ * Platform-agnostic static initialization for mutexes.
+ * Use with static/global mutex declarations.
+ */
+#ifdef AK24_PLATFORM_POSIX
+#define AK_MUTEX_INITIALIZER { PTHREAD_MUTEX_INITIALIZER }
+#elif defined(AK24_PLATFORM_WINDOWS)
+#define AK_MUTEX_INITIALIZER { 0 }
+#endif
+
+/**
+ * @def AK_COND_INITIALIZER
+ * @brief Static condition variable initializer
+ *
+ * Platform-agnostic static initialization for condition variables.
+ */
+#ifdef AK24_PLATFORM_POSIX
+#define AK_COND_INITIALIZER { PTHREAD_COND_INITIALIZER }
+#elif defined(AK24_PLATFORM_WINDOWS)
+#define AK_COND_INITIALIZER { 0 }
+#endif
+
+/**
+ * @def AK_MUTEX_INIT
+ * @brief Initialize a mutex at runtime
+ */
+#define AK_MUTEX_INIT(m) AK_mutex_init(m)
+
+/**
+ * @def AK_MUTEX_DESTROY
+ * @brief Destroy a mutex
+ */
+#define AK_MUTEX_DESTROY(m) AK_mutex_destroy(m)
+
+/**
+ * @def AK_MUTEX_LOCK
+ * @brief Lock a mutex
+ */
+#define AK_MUTEX_LOCK(m) AK_mutex_lock(m)
+
+/**
+ * @def AK_MUTEX_UNLOCK
+ * @brief Unlock a mutex
+ */
+#define AK_MUTEX_UNLOCK(m) AK_mutex_unlock(m)
+
+/**
+ * @def AK_COND_INIT
+ * @brief Initialize a condition variable at runtime
+ */
+#define AK_COND_INIT(c) AK_cond_init(c)
+
+/**
+ * @def AK_COND_DESTROY
+ * @brief Destroy a condition variable
+ */
+#define AK_COND_DESTROY(c) AK_cond_destroy(c)
+
+/**
+ * @def AK_COND_WAIT
+ * @brief Wait on a condition variable
+ */
+#define AK_COND_WAIT(c, m) AK_cond_wait(c, m)
+
+/**
+ * @def AK_COND_SIGNAL
+ * @brief Signal one thread waiting on condition variable
+ */
+#define AK_COND_SIGNAL(c) AK_cond_signal(c)
+
+/**
+ * @def AK_COND_BROADCAST
+ * @brief Broadcast to all threads waiting on condition variable
+ */
+#define AK_COND_BROADCAST(c) AK_cond_broadcast(c)
 
 #if AK24_BUILD_DEBUG_MEMORY
 
@@ -144,6 +279,100 @@ void ak_mem_print_stats(void);
 
 #endif
 
+/**
+ * @brief Initialize a mutex at runtime
+ *
+ * @param mutex Mutex to initialize
+ * @return 0 on success, -1 on failure
+ *
+ * @threadsafe
+ */
+int AK_mutex_init(AK_MUTEX *mutex);
+
+/**
+ * @brief Destroy a mutex
+ *
+ * @param mutex Mutex to destroy
+ * @return 0 on success, -1 on failure
+ *
+ * @threadsafe
+ */
+int AK_mutex_destroy(AK_MUTEX *mutex);
+
+/**
+ * @brief Lock a mutex
+ *
+ * @param mutex Mutex to lock
+ * @return 0 on success, -1 on failure
+ *
+ * @threadsafe
+ */
+int AK_mutex_lock(AK_MUTEX *mutex);
+
+/**
+ * @brief Unlock a mutex
+ *
+ * @param mutex Mutex to unlock
+ * @return 0 on success, -1 on failure
+ *
+ * @threadsafe
+ */
+int AK_mutex_unlock(AK_MUTEX *mutex);
+
+/**
+ * @brief Initialize a condition variable at runtime
+ *
+ * @param cond Condition variable to initialize
+ * @return 0 on success, -1 on failure
+ *
+ * @threadsafe
+ */
+int AK_cond_init(AK_COND *cond);
+
+/**
+ * @brief Destroy a condition variable
+ *
+ * @param cond Condition variable to destroy
+ * @return 0 on success, -1 on failure
+ *
+ * @threadsafe
+ */
+int AK_cond_destroy(AK_COND *cond);
+
+/**
+ * @brief Wait on a condition variable
+ *
+ * Atomically unlocks mutex and waits on condition variable.
+ * Reacquires mutex before returning.
+ *
+ * @param cond Condition variable to wait on
+ * @param mutex Mutex associated with condition variable
+ * @return 0 on success, -1 on failure
+ *
+ * @threadsafe
+ */
+int AK_cond_wait(AK_COND *cond, AK_MUTEX *mutex);
+
+/**
+ * @brief Signal one thread waiting on condition variable
+ *
+ * @param cond Condition variable to signal
+ * @return 0 on success, -1 on failure
+ *
+ * @threadsafe
+ */
+int AK_cond_signal(AK_COND *cond);
+
+/**
+ * @brief Broadcast to all threads waiting on condition variable
+ *
+ * @param cond Condition variable to broadcast
+ * @return 0 on success, -1 on failure
+ *
+ * @threadsafe
+ */
+int AK_cond_broadcast(AK_COND *cond);
+
 #if AK24_GC_ENABLED
 
 /**
@@ -206,23 +435,69 @@ void ak_mem_print_stats(void);
 #endif
 
 /**
- * @def AK24_THREAD_CREATE
- * @brief Create thread (GC-aware)
+ * @brief Create a new thread (GC-aware)
+ *
+ * Platform-agnostic thread creation with GC support.
+ * Uses GC_pthread_create on POSIX with GC enabled.
+ *
+ * @param thread Pointer to thread handle
+ * @param start_routine Thread entry point
+ * @param arg Argument to pass to thread
+ * @return 0 on success, non-zero on failure
+ *
+ * @threadsafe
  */
-#define AK24_THREAD_CREATE(thread, attr, start_routine, arg)                   \
-  GC_pthread_create(thread, attr, start_routine, arg)
+int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
+                     void *arg);
+
+/**
+ * @brief Join with a terminated thread
+ *
+ * Waits for the specified thread to terminate.
+ *
+ * @param thread Thread to join
+ * @return 0 on success, non-zero on failure
+ *
+ * @threadsafe
+ */
+int AK_THREAD_JOIN(AK_THREAD thread);
+
+/**
+ * @brief Detach a thread
+ *
+ * Marks thread as detached; resources released on termination.
+ *
+ * @param thread Thread to detach
+ * @return 0 on success, non-zero on failure
+ *
+ * @threadsafe
+ */
+int AK_THREAD_DETACH(AK_THREAD thread);
+
+/**
+ * @def AK24_THREAD_CREATE
+ * @brief Backwards compatibility macro for thread creation
+ *
+ * @deprecated Use AK_THREAD_CREATE instead
+ */
+#define AK24_THREAD_CREATE(thread, attr, start_routine, arg) \
+  AK_THREAD_CREATE(thread, start_routine, arg)
 
 /**
  * @def AK24_THREAD_JOIN
- * @brief Join thread
+ * @brief Backwards compatibility macro for thread join
+ *
+ * @deprecated Use AK_THREAD_JOIN instead
  */
-#define AK24_THREAD_JOIN(thread, retval) pthread_join(thread, retval)
+#define AK24_THREAD_JOIN(thread, retval) AK_THREAD_JOIN(thread)
 
 /**
  * @def AK24_THREAD_DETACH
- * @brief Detach thread
+ * @brief Backwards compatibility macro for thread detach
+ *
+ * @deprecated Use AK_THREAD_DETACH instead
  */
-#define AK24_THREAD_DETACH(thread) pthread_detach(thread)
+#define AK24_THREAD_DETACH(thread) AK_THREAD_DETACH(thread)
 
 /**
  * @brief Initialize kernel with GC
@@ -299,23 +574,44 @@ void ak_kernel_deinit(void);
 #endif
 
 /**
- * @def AK24_THREAD_CREATE
- * @brief Create thread (standard pthread)
+ * @brief Create a new thread (non-GC)
+ *
+ * Platform-agnostic thread creation without GC.
+ * Uses standard pthread_create on POSIX.
+ *
+ * @param thread Pointer to thread handle
+ * @param start_routine Thread entry point
+ * @param arg Argument to pass to thread
+ * @return 0 on success, non-zero on failure
+ *
+ * @threadsafe
  */
-#define AK24_THREAD_CREATE(thread, attr, start_routine, arg)                   \
-  pthread_create(thread, attr, start_routine, arg)
+int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
+                     void *arg);
 
 /**
- * @def AK24_THREAD_JOIN
- * @brief Join thread
+ * @brief Join with a terminated thread
+ *
+ * Waits for the specified thread to terminate.
+ *
+ * @param thread Thread to join
+ * @return 0 on success, non-zero on failure
+ *
+ * @threadsafe
  */
-#define AK24_THREAD_JOIN(thread, retval) pthread_join(thread, retval)
+int AK_THREAD_JOIN(AK_THREAD thread);
 
 /**
- * @def AK24_THREAD_DETACH
- * @brief Detach thread
+ * @brief Detach a thread
+ *
+ * Marks thread as detached; resources released on termination.
+ *
+ * @param thread Thread to detach
+ * @return 0 on success, non-zero on failure
+ *
+ * @threadsafe
  */
-#define AK24_THREAD_DETACH(thread) pthread_detach(thread)
+int AK_THREAD_DETACH(AK_THREAD thread);
 
 /**
  * @brief Initialize kernel without GC

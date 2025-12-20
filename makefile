@@ -26,7 +26,7 @@ docs:
 docs-clean:
 	@rm -rf docs/api
 
-clean:
+clean: docs-clean
 	@rm -rf $(BUILD_DIR)
 
 install: build

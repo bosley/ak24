@@ -104,9 +104,9 @@ typedef struct {
  * Use with static/global mutex declarations.
  */
 #ifdef AK24_PLATFORM_POSIX
-#define AK_MUTEX_INITIALIZER { PTHREAD_MUTEX_INITIALIZER }
+#define AK_MUTEX_INITIALIZER {PTHREAD_MUTEX_INITIALIZER}
 #elif defined(AK24_PLATFORM_WINDOWS)
-#define AK_MUTEX_INITIALIZER { 0 }
+#define AK_MUTEX_INITIALIZER {0}
 #endif
 
 /**
@@ -116,9 +116,9 @@ typedef struct {
  * Platform-agnostic static initialization for condition variables.
  */
 #ifdef AK24_PLATFORM_POSIX
-#define AK_COND_INITIALIZER { PTHREAD_COND_INITIALIZER }
+#define AK_COND_INITIALIZER {PTHREAD_COND_INITIALIZER}
 #elif defined(AK24_PLATFORM_WINDOWS)
-#define AK_COND_INITIALIZER { 0 }
+#define AK_COND_INITIALIZER {0}
 #endif
 
 /**
@@ -480,7 +480,7 @@ int AK_THREAD_DETACH(AK_THREAD thread);
  *
  * @deprecated Use AK_THREAD_CREATE instead
  */
-#define AK24_THREAD_CREATE(thread, attr, start_routine, arg) \
+#define AK24_THREAD_CREATE(thread, attr, start_routine, arg)                   \
   AK_THREAD_CREATE(thread, start_routine, arg)
 
 /**

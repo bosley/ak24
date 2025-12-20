@@ -421,7 +421,7 @@ int AK_mutex_init(AK_MUTEX *mutex) {
   InitializeCriticalSection(&mutex->handle);
   return 0;
 #else
-  #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }
 
@@ -435,7 +435,7 @@ int AK_mutex_destroy(AK_MUTEX *mutex) {
   DeleteCriticalSection(&mutex->handle);
   return 0;
 #else
-  #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }
 
@@ -449,7 +449,7 @@ int AK_mutex_lock(AK_MUTEX *mutex) {
   EnterCriticalSection(&mutex->handle);
   return 0;
 #else
-  #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }
 
@@ -463,7 +463,7 @@ int AK_mutex_unlock(AK_MUTEX *mutex) {
   LeaveCriticalSection(&mutex->handle);
   return 0;
 #else
-  #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }
 
@@ -479,7 +479,7 @@ int AK_cond_init(AK_COND *cond) {
   InitializeConditionVariable(&cond->handle);
   return 0;
 #else
-  #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }
 
@@ -493,7 +493,7 @@ int AK_cond_destroy(AK_COND *cond) {
   // Windows condition variables don't need explicit destruction
   return 0;
 #else
-  #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }
 
@@ -504,9 +504,10 @@ int AK_cond_wait(AK_COND *cond, AK_MUTEX *mutex) {
 #ifdef AK24_PLATFORM_POSIX
   return pthread_cond_wait(&cond->handle, &mutex->handle);
 #elif defined(AK24_PLATFORM_WINDOWS)
-  return SleepConditionVariableCS(&cond->handle, &mutex->handle, INFINITE) ? 0 : -1;
+  return SleepConditionVariableCS(&cond->handle, &mutex->handle, INFINITE) ? 0
+                                                                           : -1;
 #else
-  #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }
 
@@ -520,7 +521,7 @@ int AK_cond_signal(AK_COND *cond) {
   WakeConditionVariable(&cond->handle);
   return 0;
 #else
-  #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }
 
@@ -534,7 +535,7 @@ int AK_cond_broadcast(AK_COND *cond) {
   WakeAllConditionVariable(&cond->handle);
   return 0;
 #else
-  #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }
 
@@ -549,13 +550,13 @@ int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
   }
 
 #ifdef AK24_PLATFORM_POSIX
-  #if AK24_GC_ENABLED
-    // GC-aware thread creation on POSIX
-    return GC_pthread_create(&thread->handle, NULL, start_routine, arg);
-  #else
-    // Standard pthread creation on POSIX
-    return pthread_create(&thread->handle, NULL, start_routine, arg);
-  #endif
+#if AK24_GC_ENABLED
+  // GC-aware thread creation on POSIX
+  return GC_pthread_create(&thread->handle, NULL, start_routine, arg);
+#else
+  // Standard pthread creation on POSIX
+  return pthread_create(&thread->handle, NULL, start_routine, arg);
+#endif
 #elif defined(AK24_PLATFORM_WINDOWS)
   // TODO: Windows CreateThread implementation
   (void)thread;
@@ -563,7 +564,7 @@ int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
   (void)arg;
   return -1; // Not yet implemented
 #else
-  #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }
 
@@ -575,7 +576,7 @@ int AK_THREAD_JOIN(AK_THREAD thread) {
   (void)thread;
   return -1; // Not yet implemented
 #else
-  #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }
 
@@ -587,6 +588,6 @@ int AK_THREAD_DETACH(AK_THREAD thread) {
   (void)thread;
   return -1; // Not yet implemented
 #else
-  #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }

@@ -80,6 +80,4 @@ int ak_thread_create(ak_thread_t *thread, ak_thread_start_fn start_routine,
   return AK_THREAD_CREATE(&thread->thread, start_routine, arg);
 }
 
-int ak_thread_join(ak_thread_t thread) {
-  return AK_THREAD_JOIN(thread.thread);
-}
+int ak_thread_join(ak_thread_t thread) { return AK_THREAD_JOIN(thread.thread); }

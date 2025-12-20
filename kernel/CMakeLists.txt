@@ -262,6 +262,11 @@ install(TARGETS ak24_kernel
 # Install kernel headers
 install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel_debug.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel_nix.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel_win.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel_gc.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel_nogc.h
     ${CMAKE_CURRENT_SOURCE_DIR}/application.h
     ${CMAKE_CURRENT_SOURCE_DIR}/interfaces.h
     ${CMAKE_CURRENT_SOURCE_DIR}/modules.h

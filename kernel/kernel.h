@@ -39,86 +39,20 @@
 #include <time.h>
 
 /**
- * @brief Platform detection
+ * @brief Platform detection and inclusion
+ *
+ * Detects the target platform and includes the appropriate platform-specific
+ * header (kernel_nix.h or kernel_win.h) which defines threading primitives
+ * and platform-specific types.
  */
 #if defined(_WIN32) || defined(_WIN64)
 #define AK24_PLATFORM_WINDOWS
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
+#include "kernel_win.h"
 #elif defined(__unix__) || defined(__APPLE__) || defined(__linux__)
 #define AK24_PLATFORM_POSIX
-#include <pthread.h>
+#include "kernel_nix.h"
 #else
 #error "Unsupported platform - only POSIX and Windows are supported"
-#endif
-
-/**
- * @brief Platform-agnostic mutex type
- *
- * Wrapper around platform-specific mutex implementation.
- * On POSIX: pthread_mutex_t, on Windows: CRITICAL_SECTION
- */
-typedef struct {
-#ifdef AK24_PLATFORM_POSIX
-  pthread_mutex_t handle;
-#elif defined(AK24_PLATFORM_WINDOWS)
-  CRITICAL_SECTION handle;
-#endif
-} AK_MUTEX;
-
-/**
- * @brief Platform-agnostic condition variable type
- *
- * Wrapper around platform-specific condition variable.
- * On POSIX: pthread_cond_t, on Windows: CONDITION_VARIABLE
- */
-typedef struct {
-#ifdef AK24_PLATFORM_POSIX
-  pthread_cond_t handle;
-#elif defined(AK24_PLATFORM_WINDOWS)
-  CONDITION_VARIABLE handle;
-#endif
-} AK_COND;
-
-/**
- * @brief Platform-agnostic thread type
- *
- * Wrapper around platform-specific thread handle.
- * On POSIX: pthread_t, on Windows: HANDLE
- */
-typedef struct {
-#ifdef AK24_PLATFORM_POSIX
-  pthread_t handle;
-#elif defined(AK24_PLATFORM_WINDOWS)
-  HANDLE handle;
-#endif
-} AK_THREAD;
-
-/**
- * @def AK_MUTEX_INITIALIZER
- * @brief Static mutex initializer
- *
- * Platform-agnostic static initialization for mutexes.
- * Use with static/global mutex declarations.
- */
-#ifdef AK24_PLATFORM_POSIX
-#define AK_MUTEX_INITIALIZER {PTHREAD_MUTEX_INITIALIZER}
-#elif defined(AK24_PLATFORM_WINDOWS)
-#define AK_MUTEX_INITIALIZER {0}
-#endif
-
-/**
- * @def AK_COND_INITIALIZER
- * @brief Static condition variable initializer
- *
- * Platform-agnostic static initialization for condition variables.
- */
-#ifdef AK24_PLATFORM_POSIX
-#define AK_COND_INITIALIZER {PTHREAD_COND_INITIALIZER}
-#elif defined(AK24_PLATFORM_WINDOWS)
-#define AK_COND_INITIALIZER {0}
 #endif
 
 /**
@@ -175,25 +109,6 @@ typedef struct {
  */
 #define AK_COND_BROADCAST(c) AK_cond_broadcast(c)
 
-#if AK24_BUILD_DEBUG_MEMORY
-
-/**
- * @brief Memory allocation statistics
- *
- * Tracks memory usage for debugging and profiling.
- */
-typedef struct {
-  size_t total_allocations; /**< Total number of allocations */
-  size_t total_frees;       /**< Total number of frees */
-  size_t total_reallocs;    /**< Total number of reallocs */
-  size_t bytes_allocated;   /**< Total bytes allocated */
-  size_t bytes_freed;       /**< Total bytes freed */
-  size_t current_bytes;     /**< Current bytes in use */
-  size_t peak_bytes;        /**< Peak memory usage */
-} ak_memory_stats_t;
-
-#endif
-
 /**
  * @brief Kernel shutdown information
  *
@@ -206,77 +121,27 @@ typedef struct kernel_shutdown_info_s {
 #endif
 } kernel_shutdown_info_t;
 
+/**
+ * @brief Memory debugging support
+ *
+ * When AK24_BUILD_DEBUG_MEMORY is enabled, includes memory tracking
+ * functions and statistics collection.
+ */
 #if AK24_BUILD_DEBUG_MEMORY
+#include "kernel_debug.h"
+#endif
 
 /**
- * @brief Tracked memory allocation
+ * @brief Memory management and initialization
  *
- * Internal allocation with tracking metadata.
- *
- * @param size Size in bytes
- * @param file Source file
- * @param line Source line
- * @return Pointer to allocated memory, or NULL on failure
- *
- * @threadsafe
+ * Conditionally includes GC or non-GC memory management based on
+ * AK24_GC_ENABLED build flag. Defines AK24_ALLOC family of macros
+ * and ak_kernel_init/deinit functions.
  */
-void *ak_mem_alloc_tracked(size_t size, const char *file, int line);
-
-/**
- * @brief Tracked atomic memory allocation
- *
- * Allocates memory suitable for atomic data (no pointers).
- *
- * @param size Size in bytes
- * @param file Source file
- * @param line Source line
- * @return Pointer to allocated memory, or NULL on failure
- *
- * @threadsafe
- */
-void *ak_mem_alloc_atomic_tracked(size_t size, const char *file, int line);
-
-/**
- * @brief Tracked memory reallocation
- *
- * @param ptr Pointer to reallocate
- * @param size New size in bytes
- * @param file Source file
- * @param line Source line
- * @return Pointer to reallocated memory, or NULL on failure
- *
- * @threadsafe
- */
-void *ak_mem_realloc_tracked(void *ptr, size_t size, const char *file,
-                             int line);
-
-/**
- * @brief Tracked memory free
- *
- * @param ptr Pointer to free
- * @param file Source file
- * @param line Source line
- *
- * @threadsafe
- */
-void ak_mem_free_tracked(void *ptr, const char *file, int line);
-
-/**
- * @brief Get memory statistics
- *
- * @return Current memory statistics
- *
- * @threadsafe
- */
-ak_memory_stats_t ak_mem_get_stats(void);
-
-/**
- * @brief Print memory statistics to stdout
- *
- * @threadsafe
- */
-void ak_mem_print_stats(void);
-
+#if AK24_GC_ENABLED
+#include "kernel_gc.h"
+#else
+#include "kernel_nogc.h"
 #endif
 
 /**
@@ -434,11 +299,20 @@ int AK_cond_broadcast(AK_COND *cond);
 #define AK24_FREE(ptr) GC_FREE(ptr)
 #endif
 
+#endif // AK24_GC_ENABLED
+
 /**
- * @brief Create a new thread (GC-aware)
+ * @brief Threading functions
  *
- * Platform-agnostic thread creation with GC support.
- * Uses GC_pthread_create on POSIX with GC enabled.
+ * Platform and GC-agnostic thread creation, join, and detach operations.
+ * Implementation handles platform differences and GC requirements.
+ */
+
+/**
+ * @brief Create a new thread
+ *
+ * Platform-agnostic thread creation.
+ * Uses GC_pthread_create on POSIX with GC, standard pthread otherwise.
  *
  * @param thread Pointer to thread handle
  * @param start_routine Thread entry point
@@ -475,223 +349,40 @@ int AK_THREAD_JOIN(AK_THREAD thread);
 int AK_THREAD_DETACH(AK_THREAD thread);
 
 /**
- * @def AK24_THREAD_CREATE
- * @brief Backwards compatibility macro for thread creation
+ * @brief Backwards compatibility macros
  *
- * @deprecated Use AK_THREAD_CREATE instead
+ * @deprecated Use AK_THREAD_* functions directly instead
  */
 #define AK24_THREAD_CREATE(thread, attr, start_routine, arg)                   \
   AK_THREAD_CREATE(thread, start_routine, arg)
-
-/**
- * @def AK24_THREAD_JOIN
- * @brief Backwards compatibility macro for thread join
- *
- * @deprecated Use AK_THREAD_JOIN instead
- */
 #define AK24_THREAD_JOIN(thread, retval) AK_THREAD_JOIN(thread)
-
-/**
- * @def AK24_THREAD_DETACH
- * @brief Backwards compatibility macro for thread detach
- *
- * @deprecated Use AK_THREAD_DETACH instead
- */
 #define AK24_THREAD_DETACH(thread) AK_THREAD_DETACH(thread)
 
 /**
- * @brief Initialize kernel with GC
- *
- * Must be called before using kernel functions.
- *
- * @notthreadsafe
- */
-void ak_kernel_init(void);
-
-/**
- * @brief Deinitialize kernel
- *
- * Cleans up kernel resources and invokes shutdown callbacks.
- *
- * @notthreadsafe
- */
-void ak_kernel_deinit(void);
-
-#else
-
-#include <stdlib.h>
-
-#if AK24_BUILD_DEBUG_MEMORY
-/**
- * @def AK24_ALLOC
- * @brief Allocate memory (malloc with tracking)
- */
-#define AK24_ALLOC(size) ak_mem_alloc_tracked(size, __FILE__, __LINE__)
-
-/**
- * @def AK24_ALLOC_ATOMIC
- * @brief Allocate atomic memory (malloc with tracking)
- */
-#define AK24_ALLOC_ATOMIC(size)                                                \
-  ak_mem_alloc_atomic_tracked(size, __FILE__, __LINE__)
-
-/**
- * @def AK24_REALLOC
- * @brief Reallocate memory (realloc with tracking)
- */
-#define AK24_REALLOC(ptr, size)                                                \
-  ak_mem_realloc_tracked(ptr, size, __FILE__, __LINE__)
-
-/**
- * @def AK24_FREE
- * @brief Free memory (free with tracking)
- */
-#define AK24_FREE(ptr) ak_mem_free_tracked(ptr, __FILE__, __LINE__)
-#else
-/**
- * @def AK24_ALLOC
- * @brief Allocate memory (malloc)
- */
-#define AK24_ALLOC(size) malloc(size)
-
-/**
- * @def AK24_ALLOC_ATOMIC
- * @brief Allocate atomic memory (malloc)
- */
-#define AK24_ALLOC_ATOMIC(size) malloc(size)
-
-/**
- * @def AK24_REALLOC
- * @brief Reallocate memory (realloc)
- */
-#define AK24_REALLOC(ptr, size) realloc(ptr, size)
-
-/**
- * @def AK24_FREE
- * @brief Free memory (free)
- */
-#define AK24_FREE(ptr) free(ptr)
-#endif
-
-/**
- * @brief Create a new thread (non-GC)
- *
- * Platform-agnostic thread creation without GC.
- * Uses standard pthread_create on POSIX.
- *
- * @param thread Pointer to thread handle
- * @param start_routine Thread entry point
- * @param arg Argument to pass to thread
- * @return 0 on success, non-zero on failure
- *
- * @threadsafe
- */
-int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
-                     void *arg);
-
-/**
- * @brief Join with a terminated thread
- *
- * Waits for the specified thread to terminate.
- *
- * @param thread Thread to join
- * @return 0 on success, non-zero on failure
- *
- * @threadsafe
- */
-int AK_THREAD_JOIN(AK_THREAD thread);
-
-/**
- * @brief Detach a thread
- *
- * Marks thread as detached; resources released on termination.
- *
- * @param thread Thread to detach
- * @return 0 on success, non-zero on failure
- *
- * @threadsafe
- */
-int AK_THREAD_DETACH(AK_THREAD thread);
-
-/**
- * @brief Initialize kernel without GC
- *
- * Must be called before using kernel functions.
- *
- * @notthreadsafe
- */
-void ak_kernel_init(void);
-
-/**
- * @brief Deinitialize kernel
- *
- * Cleans up kernel resources and invokes shutdown callbacks.
- *
- * @notthreadsafe
- */
-void ak_kernel_deinit(void);
-
-#endif
-
-/**
  * @brief Register shutdown callback
- *
- * Registers a lambda to be invoked during kernel deinitialization.
- * The lambda receives kernel_shutdown_info_t as invoke_args.
- *
- * @param lambda Callback to register
- *
- * @notthreadsafe
- *
- * @par Example:
- * @code
- * void cleanup(void *ctx, void *args) {
- *   kernel_shutdown_info_t *info = (kernel_shutdown_info_t *)args;
- *   printf("Kernel ran for %ld seconds\n",
- *          time(NULL) - info->start_time);
- * }
- *
- * ak_lambda_t *cb = ak_lambda_new(cleanup, NULL, NULL);
- * ak_on_shutdown(cb);
- * @endcode
  */
 void ak_on_shutdown(ak_lambda_t *lambda);
 
 /**
- * @brief Convert command-line arguments to list
- *
- * Creates a list of strings from argc/argv.
- *
- * @param argc Argument count
- * @param argv Argument vector
- * @return List of argument strings
- *
- * @notthreadsafe
- *
- * @note Caller must deinitialize returned list with list_deinit()
+ * @brief Convert argc/argv to list
  */
 list_str_t ak_args_to_list(int argc, char **argv);
 
 /**
  * @brief Register a signal handler
  *
- * Registers a lambda to be invoked when a specific signal is received.
- * The lambda receives a pointer to int containing the signal number as
- * invoke_args.
+ * Registers an AK lambda to handle a specific signal.
  *
- * @param signum Signal number (SIGINT, SIGTERM, etc.)
- * @param handler Lambda to invoke on signal
+ * @param signum Signal number to handle (e.g., SIGINT, SIGTERM)
+ * @param handler Lambda function to call when signal is raised
  *
  * @threadsafe
  *
- * @par Example:
- * @code
- * void handle_interrupt(void *ctx, void *args) {
- *   int signum = *(int *)args;
- *   printf("Caught signal %d\n", signum);
- * }
+ * @note The handler will be called in signal context
  *
- * ak_lambda_t *handler = ak_lambda_new(handle_interrupt, NULL, NULL);
+ * Example:
+ * @code
+ * ak_lambda_t *handler = ...;
  * ak_register_signal_handler(SIGINT, handler);
  * @endcode
  */

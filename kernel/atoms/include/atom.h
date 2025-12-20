@@ -107,7 +107,7 @@ typedef struct ak_atom_t {
     _Atomic char c;       /**< Character value */
     _Atomic uint8_t byte; /**< Byte value */
     void *cluster;        /**< Pointer to atom cluster */
-  } value;
+  } value;                /**< Atomic value storage union */
 } ak_atom_t;
 
 /**

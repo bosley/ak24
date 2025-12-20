@@ -114,25 +114,31 @@ typedef enum {
  * - ak_module_get_function_signature (optional)
  */
 typedef struct {
-  int (*ak_module_version)(void);
-  ak_module_result_e (*ak_module_init)(void **module_ctx,
-                                       ak_module_allocator_t *allocator,
-                                       const char **error);
-  void (*ak_module_deinit)(void *module_ctx);
-  const char *(*ak_module_info)(const char *key);
-  void *(*ak_module_get_function)(void *module_ctx, const char *name);
+  int (*ak_module_version)(void); /**< Get module API version */
+  ak_module_result_e (*ak_module_init)(
+      void **module_ctx, ak_module_allocator_t *allocator,
+      const char **error); /**< Initialize module with allocator */
+  void (*ak_module_deinit)(
+      void *module_ctx); /**< Deinitialize module and free resources */
+  const char *(*ak_module_info)(
+      const char *key); /**< Get module information by key */
+  void *(*ak_module_get_function)(
+      void *module_ctx,
+      const char *name); /**< Get function pointer by name (optional) */
   ak_function_signature_t *(*ak_module_get_function_signature)(
-      void *module_ctx, const char *name);
+      void *module_ctx,
+      const char *name); /**< Get function signature by name (optional) */
 } ak_module_vtable_t;
 
 /**
  * @brief Module loading options
  */
 typedef struct {
-  const char *module_path;
-  ak_lambda_t *unload_callback;
-  void *unload_callback_ctx;
-  bool thread_safe;
+  const char *module_path; /**< Path to the module file */
+  ak_lambda_t
+      *unload_callback;      /**< Callback to invoke when module is unloaded */
+  void *unload_callback_ctx; /**< Context to pass to unload callback */
+  bool thread_safe;          /**< Whether thread-safe access is required */
 } ak_module_load_options_t;
 
 /**
@@ -155,10 +161,13 @@ struct ak_module_handle_t {
  * @brief Module system interface
  */
 typedef struct {
-  ak_module_handle_t *(*load_module)(ak_module_load_options_t *options,
-                                     const char **error);
-  bool (*unload_module)(ak_module_handle_t *handle, const char **error);
-  void *internal_ctx;
+  ak_module_handle_t *(*load_module)(
+      ak_module_load_options_t *options,
+      const char **error); /**< Load a module from disk */
+  bool (*unload_module)(
+      ak_module_handle_t *handle,
+      const char **error); /**< Unload a previously loaded module */
+  void *internal_ctx;      /**< Internal module system context (opaque) */
 } ak_module_ctx_t;
 
 /** Current AK24 module API version */

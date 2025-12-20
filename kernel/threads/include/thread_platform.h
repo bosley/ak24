@@ -34,9 +34,9 @@
  */
 typedef struct {
 #ifdef AK24_PLATFORM_POSIX
-  pthread_mutex_t handle;
+  pthread_mutex_t handle; /**< POSIX mutex handle */
 #else
-  CRITICAL_SECTION handle;
+  CRITICAL_SECTION handle; /**< Windows critical section handle */
 #endif
 } ak_mutex_t;
 
@@ -45,9 +45,9 @@ typedef struct {
  */
 typedef struct {
 #ifdef AK24_PLATFORM_POSIX
-  pthread_cond_t handle;
+  pthread_cond_t handle; /**< POSIX condition variable handle */
 #else
-  CONDITION_VARIABLE handle;
+  CONDITION_VARIABLE handle; /**< Windows condition variable handle */
 #endif
 } ak_cond_t;
 
@@ -56,9 +56,9 @@ typedef struct {
  */
 typedef struct {
 #ifdef AK24_PLATFORM_POSIX
-  pthread_t handle;
+  pthread_t handle; /**< POSIX thread handle */
 #else
-  HANDLE handle;
+  HANDLE handle; /**< Windows thread handle */
 #endif
 } ak_thread_t;
 

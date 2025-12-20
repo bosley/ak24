@@ -101,9 +101,9 @@ typedef struct {
  */
 #define map_t(T)                                                               \
   struct {                                                                     \
-    map_base_t base;                                                           \
-    T *ref;                                                                    \
-    T tmp;                                                                     \
+    map_base_t base; /**< Internal map state and bookkeeping */                \
+    T *ref;          /**< Reference pointer for value access */                \
+    T tmp;           /**< Temporary variable for type inference */             \
   }
 
 /**

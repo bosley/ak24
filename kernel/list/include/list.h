@@ -72,9 +72,9 @@ typedef struct {
  */
 #define list_t(T)                                                              \
   struct {                                                                     \
-    list_base_t base;                                                          \
-    T *ref;                                                                    \
-    T tmp;                                                                     \
+    list_base_t base; /**< Internal list state and bookkeeping */              \
+    T *ref;           /**< Reference pointer for element access */             \
+    T tmp;            /**< Temporary variable for type inference */            \
   }
 
 /**

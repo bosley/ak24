@@ -117,7 +117,7 @@ struct ak_form_s {
     struct {
       ak_form_t *actual_form; /**< Aliased form */
     } named;
-  } data;
+  } data;              /**< Form-specific data union based on kind */
   list_void_t affects; /**< Behavioral affordances */
 };
 

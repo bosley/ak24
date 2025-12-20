@@ -367,7 +367,7 @@ void ak_unregister_signal_handler(int signum) {
   }
 
   if (found) {
-    list_remove_(&signal_handlers, index);
+    list_remove_(&signal_handlers.base, index);
   }
 
   pthread_mutex_unlock(&signal_mutex);

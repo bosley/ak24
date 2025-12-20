@@ -54,6 +54,61 @@
 typedef struct ak_lambda_t ak_lambda_t;
 
 /**
+ * @brief C type enumeration for function parameter metadata
+ *
+ * Describes the base C type of a parameter for dynamic dispatch.
+ */
+typedef enum {
+  AK_PARAM_TYPE_VOID = 0,
+  AK_PARAM_TYPE_BOOL,
+  AK_PARAM_TYPE_CHAR,
+  AK_PARAM_TYPE_SHORT,
+  AK_PARAM_TYPE_INT,
+  AK_PARAM_TYPE_LONG,
+  AK_PARAM_TYPE_LONG_LONG,
+  AK_PARAM_TYPE_UCHAR,
+  AK_PARAM_TYPE_USHORT,
+  AK_PARAM_TYPE_UINT,
+  AK_PARAM_TYPE_ULONG,
+  AK_PARAM_TYPE_ULONG_LONG,
+  AK_PARAM_TYPE_FLOAT,
+  AK_PARAM_TYPE_DOUBLE,
+  AK_PARAM_TYPE_SIZE_T,
+  AK_PARAM_TYPE_SSIZE_T,
+  AK_PARAM_TYPE_INTPTR_T,
+  AK_PARAM_TYPE_UINTPTR_T,
+  AK_PARAM_TYPE_CUSTOM /**< Custom/opaque type (use type_name field) */
+} ak_param_type_e;
+
+/**
+ * @brief Parameter metadata for dynamic function dispatch
+ *
+ * Encodes complete type information for a function parameter, including
+ * the base type, pointer depth, const qualifiers, and optional type name.
+ */
+typedef struct {
+  ak_param_type_e base_type; /**< Base C type */
+  const char *type_name;     /**< Type name for custom types (e.g., "FILE") */
+  size_t ptr_depth;          /**< 0=value, 1=*, 2=**, etc. */
+  bool is_const;             /**< True if const-qualified */
+  bool is_array;             /**< True if array parameter */
+} ak_param_metadata_t;
+
+/**
+ * @brief Function signature metadata for dynamic dispatch
+ *
+ * Describes the complete signature of a module function including
+ * return type and all parameters.
+ */
+typedef struct {
+  ak_param_metadata_t return_type; /**< Return type metadata */
+  ak_param_metadata_t *params;     /**< Array of parameter metadata */
+  size_t param_count;              /**< Number of parameters */
+  const char *function_name;       /**< Function name */
+  void *function_ptr;              /**< Actual function pointer */
+} ak_function_signature_t;
+
+/**
  * @brief Module memory allocator interface
  *
  * Modules receive this allocator during initialization and MUST use it
@@ -84,6 +139,7 @@ typedef enum {
  * - ak_module_deinit
  * - ak_module_info
  * - ak_module_get_function (optional)
+ * - ak_module_get_function_signature (optional)
  */
 typedef struct {
   int (*ak_module_version)(void);
@@ -93,6 +149,8 @@ typedef struct {
   void (*ak_module_deinit)(void *module_ctx);
   const char *(*ak_module_info)(const char *key);
   void *(*ak_module_get_function)(void *module_ctx, const char *name);
+  ak_function_signature_t *(*ak_module_get_function_signature)(
+      void *module_ctx, const char *name);
 } ak_module_vtable_t;
 
 /**

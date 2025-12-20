@@ -34,12 +34,24 @@ OUTPUT="${BUILD_DIR}/libtest_module.${LIB_EXT}"
 echo "Platform: ${OSTYPE}"
 echo "Output: ${OUTPUT}"
 
+# Get AK24 installation directory
+AK24_HOME="${AK24_HOME:-${HOME}/.ak24}"
+
+if [[ ! -f "${AK24_HOME}/include/ak24/interfaces.h" ]]; then
+    echo "Error: AK24 not found at ${AK24_HOME}"
+    echo "Please install AK24 first or set AK24_HOME"
+    exit 1
+fi
+
+echo "Using AK24 from: ${AK24_HOME}"
+
 # Compile the shared library
 echo "Compiling lib.c..."
 cc -std=c11 -Wall -Wextra -O2 \
     ${SHARED_FLAG} \
     -fPIC \
     -I"${LIB_DIR}" \
+    -I"${AK24_HOME}/include/ak24" \
     -o "${OUTPUT}" \
     "${LIB_DIR}/lib.c"
 

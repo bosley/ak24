@@ -109,15 +109,26 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
     return NULL;
   }
 
-  // Load required module functions
-  int (*version_fn)(void) = dlsym(dl_handle, "ak_module_version");
+  // Load required module functions (suppress -Wpedantic for dlsym)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+  int (*version_fn)(void) =
+      (int (*)(void))dlsym(dl_handle, "ak_module_version");
   ak_module_result_e (*init_fn)(void **, ak_module_allocator_t *,
                                 const char **) =
-      dlsym(dl_handle, "ak_module_init");
-  void (*deinit_fn)(void *) = dlsym(dl_handle, "ak_module_deinit");
-  const char *(*info_fn)(const char *) = dlsym(dl_handle, "ak_module_info");
+      (ak_module_result_e (*)(void **, ak_module_allocator_t *,
+                              const char **))dlsym(dl_handle, "ak_module_init");
+  void (*deinit_fn)(void *) =
+      (void (*)(void *))dlsym(dl_handle, "ak_module_deinit");
+  const char *(*info_fn)(const char *) =
+      (const char *(*)(const char *))dlsym(dl_handle, "ak_module_info");
   void *(*get_fn)(void *, const char *) =
-      dlsym(dl_handle, "ak_module_get_function");
+      (void *(*)(void *, const char *))dlsym(dl_handle,
+                                             "ak_module_get_function");
+  ak_function_signature_t *(*get_sig_fn)(void *, const char *) =
+      (ak_function_signature_t * (*)(void *, const char *))
+          dlsym(dl_handle, "ak_module_get_function_signature");
+#pragma GCC diagnostic pop
 
   if (!version_fn || !init_fn || !deinit_fn || !info_fn) {
     if (error)
@@ -167,6 +178,7 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
   instance->vtable.ak_module_deinit = deinit_fn;
   instance->vtable.ak_module_info = info_fn;
   instance->vtable.ak_module_get_function = get_fn;
+  instance->vtable.ak_module_get_function_signature = get_sig_fn;
 
   // Create per-module mutex if thread-safe
   if (options->thread_safe) {

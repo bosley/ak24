@@ -6,26 +6,10 @@
  */
 
 #include "lib.h"
+#include <interfaces.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-
-#define AK24_MODULE_API_VERSION 1
-
-// Module allocator interface (received during init)
-typedef struct {
-  void *(*alloc)(size_t size);
-  void *(*realloc)(void *ptr, size_t size);
-  void (*free)(void *ptr);
-} ak_module_allocator_t;
-
-// Module result codes
-typedef enum {
-  AK_MODULE_OK = 0,
-  AK_MODULE_ERROR_VERSION,
-  AK_MODULE_ERROR_INIT,
-  AK_MODULE_ERROR_INVALID
-} ak_module_result_e;
 
 // Module internal state
 typedef struct {
@@ -180,4 +164,95 @@ void *ak_module_get_function(void *module_ctx, const char *name) {
   }
 
   return NULL;
+}
+
+/**
+ * @brief Get function signature metadata (optional export)
+ */
+ak_function_signature_t *ak_module_get_function_signature(void *module_ctx,
+                                                          const char *name) {
+  if (!module_ctx || !name) {
+    return NULL;
+  }
+
+  if (!g_allocator) {
+    return NULL;
+  }
+
+  // Allocate signature structure
+  ak_function_signature_t *sig = (ak_function_signature_t *)g_allocator->alloc(
+      sizeof(ak_function_signature_t));
+  if (!sig) {
+    return NULL;
+  }
+
+  if (strcmp(name, "process") == 0) {
+    // void process(void *)
+    sig->function_name = "process";
+    sig->function_ptr = (void *)test_process;
+    sig->return_type = (ak_param_metadata_t){.base_type = AK_PARAM_TYPE_VOID,
+                                             .type_name = NULL,
+                                             .ptr_depth = 0,
+                                             .is_const = false,
+                                             .is_array = false};
+    sig->param_count = 1;
+    sig->params =
+        (ak_param_metadata_t *)g_allocator->alloc(sizeof(ak_param_metadata_t));
+    if (!sig->params) {
+      g_allocator->free(sig);
+      return NULL;
+    }
+    sig->params[0] = (ak_param_metadata_t){.base_type = AK_PARAM_TYPE_VOID,
+                                           .type_name = NULL,
+                                           .ptr_depth = 1,
+                                           .is_const = false,
+                                           .is_array = false};
+  } else if (strcmp(name, "sleep") == 0) {
+    // void sleep(void *)
+    sig->function_name = "sleep";
+    sig->function_ptr = (void *)test_sleep;
+    sig->return_type = (ak_param_metadata_t){.base_type = AK_PARAM_TYPE_VOID,
+                                             .type_name = NULL,
+                                             .ptr_depth = 0,
+                                             .is_const = false,
+                                             .is_array = false};
+    sig->param_count = 1;
+    sig->params =
+        (ak_param_metadata_t *)g_allocator->alloc(sizeof(ak_param_metadata_t));
+    if (!sig->params) {
+      g_allocator->free(sig);
+      return NULL;
+    }
+    sig->params[0] = (ak_param_metadata_t){.base_type = AK_PARAM_TYPE_VOID,
+                                           .type_name = NULL,
+                                           .ptr_depth = 1,
+                                           .is_const = false,
+                                           .is_array = false};
+  } else if (strcmp(name, "allocate") == 0) {
+    // void allocate(void *)
+    sig->function_name = "allocate";
+    sig->function_ptr = (void *)test_allocate;
+    sig->return_type = (ak_param_metadata_t){.base_type = AK_PARAM_TYPE_VOID,
+                                             .type_name = NULL,
+                                             .ptr_depth = 0,
+                                             .is_const = false,
+                                             .is_array = false};
+    sig->param_count = 1;
+    sig->params =
+        (ak_param_metadata_t *)g_allocator->alloc(sizeof(ak_param_metadata_t));
+    if (!sig->params) {
+      g_allocator->free(sig);
+      return NULL;
+    }
+    sig->params[0] = (ak_param_metadata_t){.base_type = AK_PARAM_TYPE_VOID,
+                                           .type_name = NULL,
+                                           .ptr_depth = 1,
+                                           .is_const = false,
+                                           .is_array = false};
+  } else {
+    g_allocator->free(sig);
+    return NULL;
+  }
+
+  return sig;
 }

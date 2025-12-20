@@ -36,19 +36,26 @@ file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/*.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/log/src/*.c
 )
+
+# Add base kernel sources (non-platform/GC specific)
+list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/kernel.c)
+list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/modules.c)
 
 # Platform-specific threading sources
 if(WIN32)
     file(GLOB THREADS_PLATFORM_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/win/*.c
     )
+    # Add Windows-specific kernel sources
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/kernel_win.c)
 else()
     file(GLOB THREADS_PLATFORM_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/nix/*.c
     )
+    # Add POSIX-specific kernel sources
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/kernel_posix.c)
 endif()
 
 # Exclude platform-specific directories from main glob
@@ -56,6 +63,13 @@ list(FILTER KERNEL_SOURCES EXCLUDE REGEX ".*/src/(nix|win)/.*")
 
 # Add platform-specific sources
 list(APPEND KERNEL_SOURCES ${THREADS_PLATFORM_SOURCES})
+
+# Add GC or non-GC specific sources
+if(AK24_GC_ENABLED)
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/kernel_gc.c)
+else()
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/kernel_nogc.c)
+endif()
 
 file(GLOB_RECURSE KERNEL_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/map/test/*.c

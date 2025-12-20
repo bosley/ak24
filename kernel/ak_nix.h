@@ -1,5 +1,5 @@
 /**
- * @file kernel_nix.h
+ * @file ak_nix.h
  * @brief POSIX/Unix platform-specific kernel definitions
  *
  * Platform-specific types, includes, and initializers for POSIX systems
@@ -7,8 +7,8 @@
  * when building for POSIX platforms.
  */
 
-#ifndef AK24_KERNEL_NIX_H
-#define AK24_KERNEL_NIX_H
+#ifndef AK24_AK_NIX_H
+#define AK24_AK_NIX_H
 
 #include <pthread.h>
 
@@ -45,4 +45,4 @@ typedef struct {
  */
 #define AK_COND_INITIALIZER {PTHREAD_COND_INITIALIZER}
 
-#endif // AK24_KERNEL_NIX_H
+#endif // AK24_AK_NIX_H

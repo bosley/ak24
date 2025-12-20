@@ -49,12 +49,12 @@
 #ifndef AK24_PLATFORM_WINDOWS
 #define AK24_PLATFORM_WINDOWS
 #endif
-#include "kernel_win.h"
+#include "ak_win.h"
 #elif defined(__unix__) || defined(__APPLE__) || defined(__linux__)
 #ifndef AK24_PLATFORM_POSIX
 #define AK24_PLATFORM_POSIX
 #endif
-#include "kernel_nix.h"
+#include "ak_nix.h"
 #else
 #error "Unsupported platform - only POSIX and Windows are supported"
 #endif
@@ -132,7 +132,7 @@ typedef struct kernel_shutdown_info_s {
  * functions and statistics collection.
  */
 #if AK24_BUILD_DEBUG_MEMORY
-#include "kernel_debug.h"
+#include "ak_debug.h"
 #endif
 
 /**
@@ -143,9 +143,9 @@ typedef struct kernel_shutdown_info_s {
  * and ak_kernel_init/deinit functions.
  */
 #if AK24_GC_ENABLED
-#include "kernel_gc.h"
+#include "ak_gc.h"
 #else
-#include "kernel_nogc.h"
+#include "ak_nogc.h"
 #endif
 
 /**

@@ -1,5 +1,5 @@
 /**
- * @file kernel_gc.h
+ * @file ak_gc.h
  * @brief Garbage collection enabled kernel definitions
  *
  * Memory allocation macros and kernel initialization for GC-enabled builds.
@@ -7,8 +7,8 @@
  * Conditionally included by kernel.h when AK24_GC_ENABLED is defined.
  */
 
-#ifndef AK24_KERNEL_GC_H
-#define AK24_KERNEL_GC_H
+#ifndef AK24_AK_GC_H
+#define AK24_AK_GC_H
 
 /**
  * @def GC_THREADS
@@ -92,4 +92,4 @@ void ak_kernel_init(void);
  */
 void ak_kernel_deinit(void);
 
-#endif // AK24_KERNEL_GC_H
+#endif // AK24_AK_GC_H

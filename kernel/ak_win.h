@@ -1,13 +1,13 @@
 /**
- * @file kernel_win.h
+ * @file ak_win.h
  * @brief Windows platform-specific kernel definitions
  *
  * Platform-specific types, includes, and initializers for Windows systems.
  * This file is conditionally included by kernel.h when building for Windows.
  */
 
-#ifndef AK24_KERNEL_WIN_H
-#define AK24_KERNEL_WIN_H
+#ifndef AK24_AK_WIN_H
+#define AK24_AK_WIN_H
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -47,4 +47,4 @@ typedef struct {
  */
 #define AK_COND_INITIALIZER {0}
 
-#endif // AK24_KERNEL_WIN_H
+#endif // AK24_AK_WIN_H

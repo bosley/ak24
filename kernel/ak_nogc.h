@@ -1,5 +1,5 @@
 /**
- * @file kernel_nogc.h
+ * @file ak_nogc.h
  * @brief Non-garbage collection kernel definitions
  *
  * Memory allocation macros and kernel initialization for non-GC builds.
@@ -7,8 +7,8 @@
  * Conditionally included by kernel.h when AK24_GC_ENABLED is not defined.
  */
 
-#ifndef AK24_KERNEL_NOGC_H
-#define AK24_KERNEL_NOGC_H
+#ifndef AK24_AK_NOGC_H
+#define AK24_AK_NOGC_H
 
 #include <stdlib.h>
 
@@ -87,4 +87,4 @@ void ak_kernel_init(void);
  */
 void ak_kernel_deinit(void);
 
-#endif // AK24_KERNEL_NOGC_H
+#endif // AK24_AK_NOGC_H

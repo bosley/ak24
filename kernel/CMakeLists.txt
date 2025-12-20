@@ -49,13 +49,13 @@ if(WIN32)
         ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/win/*.c
     )
     # Add Windows-specific kernel sources
-    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/kernel_win.c)
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/win.c)
 else()
     file(GLOB THREADS_PLATFORM_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/nix/*.c
     )
     # Add POSIX-specific kernel sources
-    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/kernel_posix.c)
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/posix.c)
 endif()
 
 # Exclude platform-specific directories from main glob
@@ -66,9 +66,9 @@ list(APPEND KERNEL_SOURCES ${THREADS_PLATFORM_SOURCES})
 
 # Add GC or non-GC specific sources
 if(AK24_GC_ENABLED)
-    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/kernel_gc.c)
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/gc.c)
 else()
-    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/kernel_nogc.c)
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/nogc.c)
 endif()
 
 file(GLOB_RECURSE KERNEL_TEST_SOURCES
@@ -282,11 +282,11 @@ install(TARGETS ak24_kernel
 # Install kernel headers
 install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/kernel_debug.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/kernel_nix.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/kernel_win.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/kernel_gc.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/kernel_nogc.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/ak_debug.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/ak_nix.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/ak_win.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/ak_gc.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/ak_nogc.h
     ${CMAKE_CURRENT_SOURCE_DIR}/application.h
     ${CMAKE_CURRENT_SOURCE_DIR}/interfaces.h
     ${CMAKE_CURRENT_SOURCE_DIR}/modules.h

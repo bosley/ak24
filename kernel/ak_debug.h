@@ -1,13 +1,13 @@
 /**
- * @file kernel_debug.h
+ * @file ak_debug.h
  * @brief Memory debugging and tracking definitions
  *
  * Provides memory allocation tracking and statistics for debugging builds.
  * Included by kernel.h when AK24_BUILD_DEBUG_MEMORY is enabled.
  */
 
-#ifndef AK24_KERNEL_DEBUG_H
-#define AK24_KERNEL_DEBUG_H
+#ifndef AK24_AK_DEBUG_H
+#define AK24_AK_DEBUG_H
 
 #include <stddef.h>
 
@@ -95,4 +95,4 @@ ak_memory_stats_t ak_mem_get_stats(void);
  */
 void ak_mem_print_stats(void);
 
-#endif // AK24_KERNEL_DEBUG_H
+#endif // AK24_AK_DEBUG_H

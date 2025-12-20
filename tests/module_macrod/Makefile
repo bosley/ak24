@@ -18,14 +18,14 @@ endif
 # Compiler and flags
 CC = cc
 CFLAGS = -std=c11 -Wall -Wextra -O2
-INCLUDES = -I$(AK24_HOME)/include/ak24 -I$(AK24_HOME)/include
+INCLUDES = -I$(AK24_HOME)/include
 LDFLAGS = -L$(AK24_HOME)/lib
 LIBS = -lak24_kernel -lgc
 
 # macOS-specific: Add rpath for finding dylib
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-    LDFLAGS += -Wl,-rpath,$(AK24_HOME)/lib
+    LDFLAGS += -Wl,-rpath,$(AK24_HOME)/lib -Wl,-w
 endif
 
 # Linux-specific: Add rpath for finding .so

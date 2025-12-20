@@ -9,6 +9,6 @@
 #ifndef TEST_MODULE_LIB_H
 #define TEST_MODULE_LIB_H
 
-#include <ak24_module_macros.h>
+#include <ak24/ak24_module_macros.h>
 
 #endif

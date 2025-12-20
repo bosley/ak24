@@ -11,8 +11,8 @@
  * - Function signature metadata for dynamic dispatch
  */
 
-#include <application.h>
-#include <interfaces.h>
+#include <ak24/application.h>
+#include <ak24/interfaces.h>
 #include <unistd.h>
 
 // Unload callback function

@@ -163,7 +163,7 @@ static module_manager_t *get_or_create_manager(void) {
 /**
  * @brief Destroy the module manager singleton
  */
-static void destroy_manager(module_manager_t *mgr) {
+__attribute__((unused)) static void destroy_manager(module_manager_t *mgr) {
   if (!mgr) {
     return;
   }

@@ -65,7 +65,7 @@ LOOKUP_CACHE_SIZE      = 0
 NUM_PROC_THREADS       = 0
 
 INPUT                  = kernel/ \
-                         README.md
+                         docs/MAIN.md
 INPUT_ENCODING         = UTF-8
 INPUT_FILE_ENCODING    =
 FILE_PATTERNS          = *.c \
@@ -92,7 +92,7 @@ FILTER_PATTERNS        =
 FILTER_SOURCE_FILES    = NO
 FILTER_SOURCE_PATTERNS =
 
-USE_MDFILE_AS_MAINPAGE = README.md
+USE_MDFILE_AS_MAINPAGE = docs/MAIN.md
 
 SOURCE_BROWSER         = YES
 INLINE_SOURCES         = NO

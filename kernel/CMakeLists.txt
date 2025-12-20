@@ -35,6 +35,7 @@ file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/src/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/log/src/*.c
 )
@@ -49,6 +50,7 @@ file(GLOB_RECURSE KERNEL_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/threads/test/*.c
 )
 
 file(GLOB_RECURSE KERNEL_HEADERS
@@ -61,6 +63,7 @@ file(GLOB_RECURSE KERNEL_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/threads/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/log/include/*.h
 )
@@ -85,6 +88,7 @@ target_include_directories(ak24_kernel PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/lambda/include
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/include
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/threads/include
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include
     ${CMAKE_CURRENT_SOURCE_DIR}/log/include
@@ -116,6 +120,7 @@ file(GLOB_RECURSE ALL_COMPILE_TIME_TESTS
     ${CMAKE_CURRENT_SOURCE_DIR}/context/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/buffer/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/threads/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/test/*.c
 )
@@ -246,6 +251,7 @@ install(DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/context/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/lambda/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/threads/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/atoms/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include/

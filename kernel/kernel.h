@@ -34,6 +34,7 @@
 #include "log.h"
 #include "map.h"
 #include "scanner.h"
+#include "threads.h"
 
 #include <pthread.h>
 #include <stddef.h>

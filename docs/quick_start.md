@@ -1,6 +1,6 @@
 # AK24 Kernel - Quick Reference
 
-**Purpose**: This document is to help a new developer using the library get up and running by explaining the overall concepts that the library provides.ß
+**Purpose**: This document is to help a new developer using the library get up and running by explaining the overall concepts that the library provides.
 
 ---
 
@@ -428,3 +428,5 @@ AK24_APPLICATION("com.example.myapp", my_app, cleanup)
 ---
 
 **Remember**: AK24 is a memory-managed C framework. Always use kernel allocators, always clean up containers, always use the application framework. When in doubt, check the demos.
+
+**Remember** ASAN and GC can NOT coexist

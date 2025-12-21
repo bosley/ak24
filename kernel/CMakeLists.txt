@@ -37,6 +37,7 @@ file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/log/src/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/intern/src/*.c
 )
 
 # Add base kernel sources (non-platform/GC specific)
@@ -82,6 +83,7 @@ file(GLOB_RECURSE KERNEL_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/threads/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/intern/test/*.c
 )
 
 file(GLOB_RECURSE KERNEL_HEADERS
@@ -97,6 +99,7 @@ file(GLOB_RECURSE KERNEL_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/threads/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/log/include/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/intern/include/*.h
 )
 
 if(AK24_BUILD_SHARED_KERNEL)
@@ -123,6 +126,7 @@ target_include_directories(ak24_kernel PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include
     ${CMAKE_CURRENT_SOURCE_DIR}/log/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/intern/include
     ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include
 )
 
@@ -167,6 +171,7 @@ file(GLOB_RECURSE ALL_COMPILE_TIME_TESTS
     ${CMAKE_CURRENT_SOURCE_DIR}/threads/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/intern/test/*.c
 )
 
 file(GLOB BUFFER_TEST_SOURCES
@@ -305,6 +310,7 @@ install(DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/log/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/intern/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include/
     DESTINATION include/ak24
     FILES_MATCHING PATTERN "*.h"

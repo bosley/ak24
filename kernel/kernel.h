@@ -29,6 +29,7 @@
 #include "forms.h"
 #include "forms_primitives.h"
 #include "interfaces.h"
+#include "intern.h"
 #include "lambda.h"
 #include "list.h"
 #include "log.h"

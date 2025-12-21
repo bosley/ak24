@@ -6,6 +6,9 @@ docs/api/
 .github/
 .DS_Store
 
+tests/module_macrod/module_test
+tests/modules/module_test
+
 # Prerequisites
 *.d
 

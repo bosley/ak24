@@ -27,7 +27,7 @@ This module handles UTF-8 sequences correctly while remaining ASCII-compatible. 
 #include "kernel.h"
 
 int main(int argc, char **argv) {
-    ak_kernel_init();
+    ak_kernel_init("my-app");
 
     const uint8_t *text = (uint8_t *)"Hello 世界 café 🎉";
     size_t byte_len = strlen((char *)text);

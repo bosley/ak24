@@ -59,7 +59,7 @@ void on_complete(void *ctx, void *args) {
 }
 
 int main(int argc, char **argv) {
-    ak_kernel_init();
+    ak_kernel_init("my-app");
 
     // Create thread pool with default config
     ak_thread_pool_t *pool = ak_thread_pool_new(NULL);

@@ -550,7 +550,7 @@ int test_arena_stress_reset(void) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   AK24_TEST_RUN(test_arena_new_free);
   AK24_TEST_RUN(test_arena_new_default);

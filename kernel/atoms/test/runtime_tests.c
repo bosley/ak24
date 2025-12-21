@@ -344,7 +344,7 @@ int run_atom_tests(void) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
   int result = run_atom_tests();
   ak_kernel_deinit();
   return result;

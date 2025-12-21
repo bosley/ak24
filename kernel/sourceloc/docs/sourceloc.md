@@ -35,7 +35,7 @@ void ak_sourceloc_init(void);
 void ak_sourceloc_shutdown(void);
 ```
 
-Initialize and shutdown the source location system. Must be called before/after all other sourceloc functions. Typically called from `ak_kernel_init()` and `ak_kernel_deinit()`.
+Initialize and shutdown the source location system. Must be called before/after all other sourceloc functions. Typically called from `ak_kernel_init("my-app")` and `ak_kernel_deinit()`.
 
 ### Source File Management
 
@@ -249,7 +249,7 @@ void report_error(ak_source_range_t range, const char *message) {
 }
 
 int main(void) {
-    ak_kernel_init();
+    ak_kernel_init("my-app");
 
     // Load source file
     ak_source_file_t *file = ak_source_file_from_path("test.c");
@@ -335,7 +335,7 @@ The sourceloc module integrates seamlessly with other kernel features:
 - **String Interning**: Filenames are interned using `ak_intern()`
 - **Memory Management**: Uses `AK24_ALLOC`/`AK24_FREE` for GC compatibility
 - **Threading**: Uses `AK24_MUTEX` for platform-agnostic locking
-- **Kernel Lifecycle**: Initialized/shutdown via `ak_kernel_init()`/`ak_kernel_deinit()`
+- **Kernel Lifecycle**: Initialized/shutdown via `ak_kernel_init("my-app")`/`ak_kernel_deinit()`
 
 ## Testing
 

@@ -75,7 +75,55 @@ These abstractions work on both POSIX (Linux, macOS, BSD) and Windows platforms.
 
 ## Initialization
 
-REQUIRED: Always call ak_kernel_init() at program start and ak_kernel_deinit() before exit, regardless of GC configuration.
+REQUIRED: Always call `ak_kernel_init(app_id)` at program start and `ak_kernel_deinit()` before exit, regardless of GC configuration.
+
+The `app_id` parameter is an application identity string that:
+- Must be unique per application (recommended: use reverse domain notation like "com.mycompany.myapp")
+- Is hashed to create application-specific runtime directories
+- Creates platform-specific runtime directories:
+  - **macOS**: `~/Library/Application Support/ak24/runtime/<hash>.ak24`
+  - **Linux**: `~/.local/share/ak24/runtime/<hash>.ak24`
+  - **Windows**: `%LOCALAPPDATA%\ak24\runtime\<hash>.ak24`
+- Prevents conflicts between different applications using AK24
+- Program will exit with error message if runtime directory cannot be created
+
+### Process-Based Locking
+
+The kernel implements intelligent PID-based locking to prevent multiple instances of the same application:
+
+**Lock File Contents:**
+- Line 1: Application ID string
+- Line 2: Process ID (PID) of the running instance
+
+**Behavior on Initialization:**
+1. Checks if lock file exists for the application ID
+2. If exists, reads the stored PID
+3. Verifies if the process is still running:
+   - **POSIX**: Uses `kill(pid, 0)` to check process existence
+   - **Windows**: Uses `OpenProcess()` and `GetExitCodeProcess()`
+4. If process is running: Exits with error showing app ID and PID
+5. If process is NOT running: Automatically removes stale lock and continues
+6. Creates new lock file with current PID
+
+**Behavior on Cleanup:**
+- `ak_kernel_deinit()` automatically removes the lock file
+- Lock is cleaned up even on normal exit, allowing immediate restart
+
+**Special Cases:**
+- Applications with ID `"ak24-test"` skip lock checking entirely
+- This allows parallel test execution without conflicts
+- Production applications should use unique, meaningful IDs
+
+**Error Messages:**
+```
+AK24 Error: Application 'com.example.myapp' is already running (PID: 12345)
+AK24 Error: Lock file: '/path/to/runtime/hash.ak24'
+```
+
+**Stale Lock Cleanup:**
+```
+AK24 Info: Removing stale lock file (PID 12345 not running)
+```
 
 ### Manual Initialization
 
@@ -83,7 +131,9 @@ REQUIRED: Always call ak_kernel_init() at program start and ak_kernel_deinit() b
 #include "kernel.h"
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("com.example.myapp");
+
+  // Your application code here
 
   ak_kernel_deinit();
   return 0;
@@ -116,11 +166,11 @@ APP_MAIN(my_app) {
   return 0;
 }
 
-AK24_APPLICATION(my_app, on_shutdown)
+AK24_APPLICATION("com.example.myapp", my_app, on_shutdown)
 ```
 
 The application framework automatically:
-- Initializes and deinitializes the kernel
+- Initializes and deinitializes the kernel with the provided app ID
 - Parses `-l` and `--log-level` flags (trace, debug, info, warn, error, fatal)
 - Removes log level flags from the argument list
 - Sets the log level before calling your main function
@@ -138,7 +188,7 @@ Available context in `ak_app_context_t`:
 #include "kernel.h"
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("my-app");
 
   ak_buffer_t *buf = ak_buffer_new(100);
   list_int_t numbers;
@@ -173,7 +223,7 @@ void *worker(void *arg) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("my-app");
 
   AK24_THREAD thread;
   AK24_THREAD_CREATE(&thread, worker, NULL);
@@ -196,7 +246,7 @@ void handle_interrupt(void *captured, void *args) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("my-app");
 
   ak_lambda_t *handler = ak_lambda_new(handle_interrupt, NULL, NULL);
   ak_register_signal_handler(SIGINT, handler);
@@ -287,7 +337,7 @@ int test_example(void) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("my-app");
   AK24_TEST_RUN(test_example);
   ak_kernel_deinit();
   return 0;
@@ -357,7 +407,7 @@ void cleanup_fn(void *captured, void *args) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("my-app");
 
   ak_lambda_t *cleanup = ak_lambda_new(cleanup_fn, NULL, NULL);
   ak_on_shutdown(cleanup);
@@ -370,7 +420,7 @@ int main(void) {
 ## API
 
 ### Core Functions
-- `ak_kernel_init()` - Initialize kernel (REQUIRED - always call at program start)
+- `ak_kernel_init("my-app")` - Initialize kernel (REQUIRED - always call at program start)
 - `ak_kernel_deinit()` - Cleanup kernel and invoke shutdown lambdas (REQUIRED - always call before exit)
 - `ak_on_shutdown(lambda)` - Register lambda to invoke during deinit
 - `ak_args_to_list(argc, argv)` - Convert command-line arguments to list_str_t

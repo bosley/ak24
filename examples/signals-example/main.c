@@ -159,4 +159,4 @@ APP_MAIN(app_main) {
 }
 
 // Define the complete application
-AK24_APPLICATION(app_main, on_shutdown)
+AK24_APPLICATION("signals-example", app_main, on_shutdown)

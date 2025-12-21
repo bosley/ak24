@@ -265,7 +265,7 @@ static int test_context_stores_forms(void) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   AK24_TEST_RUN(test_primitive_forms_not_singleton);
   AK24_TEST_RUN(test_all_primitive_forms);

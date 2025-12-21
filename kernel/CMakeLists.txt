@@ -47,6 +47,7 @@ file(GLOB_RECURSE KERNEL_SOURCES
 # Add base kernel sources (non-platform/GC specific)
 list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/kernel.c)
 list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/modules.c)
+list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime.c)
 
 # Platform-specific threading sources
 if(WIN32)
@@ -333,6 +334,7 @@ install(DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/intern/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/arena/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include/
     DESTINATION include/ak24
     FILES_MATCHING PATTERN "*.h"

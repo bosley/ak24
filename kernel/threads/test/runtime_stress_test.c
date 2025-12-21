@@ -1011,7 +1011,7 @@ static int test_array_sorting_stress(void) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   fprintf(stdout, "\n=================================\n");
   fprintf(stdout, "Running Thread Pool Stress Tests\n");

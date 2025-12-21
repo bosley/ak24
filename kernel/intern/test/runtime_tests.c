@@ -398,7 +398,7 @@ int test_intern_thread_safety(void) {
 #endif
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   AK24_TEST_RUN(test_intern_init_shutdown);
   AK24_TEST_RUN(test_intern_basic);

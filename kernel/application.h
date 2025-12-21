@@ -162,11 +162,13 @@ typedef struct {
  * processing, shutdown callback registration, and cleanup. Both parameters
  * should be function names defined with APP_MAIN and APP_ON_SHUTDOWN.
  *
+ * @param app_id_str Application identity string (used for runtime directory
+ * isolation)
  * @param app_main_fn Main application function (can be NULL)
  * @param app_shutdown_fn Shutdown handler function (can be NULL)
  *
  * The generated main() function:
- * 1. Initializes kernel with ak_kernel_init()
+ * 1. Initializes kernel with ak_kernel_init(app_id_str)
  * 2. Processes command-line arguments into list
  * 3. Registers shutdown callback
  * 4. Invokes application main function
@@ -184,10 +186,10 @@ typedef struct {
  *   AK24_LOG_INFO("Application ending");
  * }
  *
- * AK24_APPLICATION(my_app, my_cleanup)
+ * AK24_APPLICATION("my-app-v1", my_app, my_cleanup)
  * @endcode
  */
-#define AK24_APPLICATION(app_main_fn, app_shutdown_fn)                         \
+#define AK24_APPLICATION(app_id_str, app_main_fn, app_shutdown_fn)             \
   static ak_app_context_t __ak_app_ctx;                                        \
                                                                                \
   static void __ak_internal_shutdown_handler(void *captured, void *args) {     \
@@ -211,7 +213,7 @@ typedef struct {
   }                                                                            \
                                                                                \
   int main(int argc, char **argv) {                                            \
-    ak_kernel_init();                                                          \
+    ak_kernel_init(app_id_str);                                                \
                                                                                \
     __ak_app_ctx.args = __ak_process_args(argc, argv);                         \
     __ak_app_ctx.shutdown_info = NULL;                                         \

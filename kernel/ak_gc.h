@@ -78,10 +78,14 @@
  *
  * Must be called before using kernel functions.
  * Initializes Boehm GC and kernel subsystems.
+ * Creates application-specific runtime directory and lock file.
+ *
+ * @param app_id Application identity string (used for runtime directory
+ * isolation)
  *
  * @notthreadsafe
  */
-void ak_kernel_init(void);
+void ak_kernel_init(const char *app_id);
 
 /**
  * @brief Deinitialize kernel

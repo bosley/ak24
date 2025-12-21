@@ -269,7 +269,7 @@ void demo_compiler_pipeline(void) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("sourceloc-demo");
 
   printf("╔════════════════════════════════════════════╗\n");
   printf("║   Source Location Tracking Demo           ║\n");

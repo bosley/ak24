@@ -4,14 +4,14 @@
 
 // Test basic initialization and shutdown
 int test_sourceloc_init_shutdown(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
   ak_kernel_deinit();
   AK24_TEST_PASS();
 }
 
 // Test creating a source file from memory
 int test_source_file_new(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "int main() {\n  return 0;\n}\n";
   ak_source_file_t *file = ak_source_file_new("test.c", code, strlen(code));
@@ -28,7 +28,7 @@ int test_source_file_new(void) {
 
 // Test reference counting
 int test_source_file_reference_counting(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "test";
   ak_source_file_t *file1 = ak_source_file_new("test.c", code, strlen(code));
@@ -52,7 +52,7 @@ int test_source_file_reference_counting(void) {
 
 // Test creating a location with explicit values
 int test_source_loc_new(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "line1\nline2\nline3\n";
   ak_source_file_t *file = ak_source_file_new("test.c", code, strlen(code));
@@ -72,7 +72,7 @@ int test_source_loc_new(void) {
 
 // Test computing location from offset
 int test_source_loc_from_offset(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "line1\nline2\nline3\n";
   ak_source_file_t *file = ak_source_file_new("test.c", code, strlen(code));
@@ -105,7 +105,7 @@ int test_source_loc_from_offset(void) {
 
 // Test UTF-8 column counting
 int test_source_loc_utf8_columns(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   // String with UTF-8 characters: "Hello 世界\n"
   // H=0, e=1, l=2, l=3, o=4, space=5, 世=6-8 (3 bytes), 界=9-11 (3 bytes),
@@ -133,7 +133,7 @@ int test_source_loc_utf8_columns(void) {
 
 // Test creating a range
 int test_source_range_new(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "0123456789\n";
   ak_source_file_t *file = ak_source_file_new("test.c", code, strlen(code));
@@ -155,7 +155,7 @@ int test_source_range_new(void) {
 
 // Test range contains
 int test_source_range_contains(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "0123456789\n";
   ak_source_file_t *file = ak_source_file_new("test.c", code, strlen(code));
@@ -192,7 +192,7 @@ int test_source_range_contains(void) {
 
 // Test range overlaps
 int test_source_range_overlaps(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "0123456789\n";
   ak_source_file_t *file = ak_source_file_new("test.c", code, strlen(code));
@@ -225,7 +225,7 @@ int test_source_range_overlaps(void) {
 
 // Test extracting text from range
 int test_source_extract(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "Hello, World!\n";
   ak_source_file_t *file = ak_source_file_new("test.c", code, strlen(code));
@@ -247,7 +247,7 @@ int test_source_extract(void) {
 
 // Test getting a specific line
 int test_source_get_line(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "line1\nline2\nline3\n";
   ak_source_file_t *file = ak_source_file_new("test.c", code, strlen(code));
@@ -285,7 +285,7 @@ int test_source_get_line(void) {
 
 // Test formatting a location
 int test_source_loc_format(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "test\n";
   ak_source_file_t *file = ak_source_file_new("test.c", code, strlen(code));
@@ -306,7 +306,7 @@ int test_source_loc_format(void) {
 
 // Test formatting a range (single line)
 int test_source_range_format_single_line(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "test\n";
   ak_source_file_t *file = ak_source_file_new("test.c", code, strlen(code));
@@ -329,7 +329,7 @@ int test_source_range_format_single_line(void) {
 
 // Test formatting a range (multi-line)
 int test_source_range_format_multi_line(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "test\n";
   ak_source_file_t *file = ak_source_file_new("test.c", code, strlen(code));
@@ -352,7 +352,7 @@ int test_source_range_format_multi_line(void) {
 
 // Test statistics
 int test_sourceloc_stats(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   size_t count1, bytes1;
   ak_sourceloc_stats(&count1, &bytes1);
@@ -390,7 +390,7 @@ int test_sourceloc_stats(void) {
 
 // Test empty file
 int test_source_file_empty(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "";
   ak_source_file_t *file = ak_source_file_new("empty.c", code, 0);
@@ -410,7 +410,7 @@ int test_source_file_empty(void) {
 
 // Test single line file
 int test_source_file_single_line(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "single line no newline";
   ak_source_file_t *file = ak_source_file_new("single.c", code, strlen(code));
@@ -429,7 +429,7 @@ int test_source_file_single_line(void) {
 
 // Test file with Windows line endings
 int test_source_file_crlf(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   const char *code = "line1\r\nline2\r\nline3\r\n";
   ak_source_file_t *file = ak_source_file_new("win.c", code, strlen(code));

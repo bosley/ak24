@@ -31,7 +31,7 @@ void ak_intern_init(void);
 void ak_intern_shutdown(void);
 ```
 
-Initialize and shutdown the interning system. `ak_intern_init()` must be called before any other intern functions, typically from `ak_kernel_init()`. `ak_intern_shutdown()` frees all interned strings and should be called from `ak_kernel_deinit()`.
+Initialize and shutdown the interning system. `ak_intern_init()` must be called before any other intern functions, typically from `ak_kernel_init("my-app")`. `ak_intern_shutdown()` frees all interned strings and should be called from `ak_kernel_deinit()`.
 
 ### Interning Strings
 
@@ -87,7 +87,7 @@ Get statistics about interned strings or clear all strings while keeping the sys
 #include "intern.h"
 
 int main(void) {
-    ak_kernel_init();
+    ak_kernel_init("my-app");
 
     const char *str1 = ak_intern("hello");
     const char *str2 = ak_intern("hello");
@@ -204,7 +204,7 @@ No additional linking required - it's part of `libak24_kernel.a`.
 
 ## Best Practices
 
-1. **Initialize Early**: Call `ak_intern_init()` at program start (done by `ak_kernel_init()`)
+1. **Initialize Early**: Call `ak_intern_init()` at program start (done by `ak_kernel_init("my-app")`)
 2. **Intern Once**: Cache interned pointers, don't re-intern repeatedly
 3. **Use for Symbols**: Best for identifiers, keywords, and small strings
 4. **Avoid Large Strings**: Not designed for large text or user content

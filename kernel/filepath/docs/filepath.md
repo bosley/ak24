@@ -32,7 +32,7 @@ void ak_filepath_init(void);
 void ak_filepath_shutdown(void);
 ```
 
-Initialize and shutdown the filepath system. Called automatically by `ak_kernel_init()` and `ak_kernel_deinit()` - users don't need to call these directly.
+Initialize and shutdown the filepath system. Called automatically by `ak_kernel_init("my-app")` and `ak_kernel_deinit()` - users don't need to call these directly.
 
 ### Platform Information
 
@@ -197,7 +197,7 @@ ak_buffer_free(native2);
 #include "kernel.h"
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("my-app");
 
   // Join paths
   ak_buffer_t *path = ak_filepath_join(3, "/home", "user", "file.txt");
@@ -249,7 +249,7 @@ ak_buffer_t *get_app_config_dir(const char *app_name) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("my-app");
 
   ak_buffer_t *config_dir = get_app_config_dir("myapp");
   if (config_dir) {
@@ -277,7 +277,7 @@ int main(void) {
 #include "kernel.h"
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("my-app");
 
   // Normalize messy paths
   const char *messy = "/home/user/../other/./subdir//file.txt";
@@ -322,7 +322,7 @@ void create_project_structure(const char *project_root) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("my-app");
 
   ak_buffer_t *home = ak_filepath_home();
   const char *home_str = (const char *)ak_buffer_data(home);

@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
   (void)argc;
   (void)argv;
 
-  ak_kernel_init();
+  ak_kernel_init("thread-pool-demo");
 
   printf("\n=== Thread Pool Demo ===\n\n");
 

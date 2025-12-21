@@ -163,4 +163,4 @@ APP_MAIN(app_main) {
   return 0;
 }
 
-AK24_APPLICATION(app_main, on_shutdown)
+AK24_APPLICATION("module_macrod", app_main, on_shutdown)

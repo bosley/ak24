@@ -196,7 +196,7 @@ void demo_string_operations(void) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("arena-demo");
 
   printf("╔════════════════════════════════════════╗\n");
   printf("║   Arena Allocator Demo                 ║\n");

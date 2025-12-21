@@ -44,4 +44,4 @@ APP_MAIN(app_main) {
   return 0;
 }
 
-AK24_APPLICATION(app_main, on_shutdown)
+AK24_APPLICATION("ak24-cli", app_main, on_shutdown)

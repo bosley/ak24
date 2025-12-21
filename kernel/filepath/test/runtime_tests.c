@@ -336,7 +336,7 @@ int test_filepath_to_native(void) {
 
 // Test runner
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   AK24_TEST_RUN(test_filepath_init_shutdown);
   AK24_TEST_RUN(test_filepath_separators);

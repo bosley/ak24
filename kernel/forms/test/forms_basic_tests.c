@@ -696,7 +696,7 @@ static int test_struct_form_with_field_affects(void) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   AK24_TEST_RUN(test_primitive_form_creation);
   AK24_TEST_RUN(test_compound_form_creation);

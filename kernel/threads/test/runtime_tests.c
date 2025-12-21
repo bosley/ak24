@@ -339,7 +339,7 @@ static int test_null_parameters(void) {
 }
 
 int main(void) {
-  ak_kernel_init();
+  ak_kernel_init("ak24-test");
 
   AK24_TEST_RUN(test_pool_create_free);
   AK24_TEST_RUN(test_pool_custom_config);

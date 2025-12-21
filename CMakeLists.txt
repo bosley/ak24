@@ -17,6 +17,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/.cache/fetchcontent" CACHE PATH "FetchContent cache directory")
 
+option(AK24_BUILD_ASAN "Build with AddressSanitizer for memory error detection" OFF)
 option(AK24_GC_ENABLED "Enable Boehm GC for memory management" ON)
 option(AK24_BUILD_DEBUG_MEMORY "Enable memory tracking and statistics" OFF)
 option(AK24_BUILD_SHARED_KERNEL "Build kernel as shared library" OFF)
@@ -24,6 +25,23 @@ option(AK24_BUILD_DOCS "Build API documentation with Doxygen" OFF)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# AddressSanitizer configuration
+if(AK24_BUILD_ASAN)
+    if(AK24_GC_ENABLED)
+        message(WARNING "AddressSanitizer enabled - forcing GC OFF to avoid false leak reports")
+        set(AK24_GC_ENABLED OFF CACHE BOOL "GC disabled for ASAN compatibility" FORCE)
+    endif()
+
+    set(ASAN_FLAGS "-fsanitize=address -fno-omit-frame-pointer -g")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ASAN_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address")
+
+    message(STATUS "AddressSanitizer: ENABLED")
+    message(STATUS "  - Memory error detection: buffer overflows, use-after-free, leaks")
+    message(STATUS "  - Boehm GC: DISABLED (incompatible with ASAN leak detection)")
 endif()
 
 # Platform detection
@@ -113,6 +131,25 @@ add_subdirectory(examples/atom-cube-demo)
 add_subdirectory(examples/thread-pool-demo)
 add_subdirectory(examples/signals-example)
 add_subdirectory(examples/sourceloc-demo)
+
+# Install build configuration file for tests/external projects
+set(AK24_BUILD_CONFIG_FILE "${CMAKE_BINARY_DIR}/ak24-config.mk")
+file(WRITE "${AK24_BUILD_CONFIG_FILE}" "# AK24 Build Configuration\n")
+file(APPEND "${AK24_BUILD_CONFIG_FILE}" "# Auto-generated - do not edit\n")
+file(APPEND "${AK24_BUILD_CONFIG_FILE}" "AK24_VERSION=${PROJECT_VERSION}\n")
+if(AK24_BUILD_ASAN)
+    file(APPEND "${AK24_BUILD_CONFIG_FILE}" "AK24_ASAN_ENABLED=1\n")
+    file(APPEND "${AK24_BUILD_CONFIG_FILE}" "AK24_ASAN_FLAGS=-fsanitize=address -fno-omit-frame-pointer -g\n")
+else()
+    file(APPEND "${AK24_BUILD_CONFIG_FILE}" "AK24_ASAN_ENABLED=0\n")
+    file(APPEND "${AK24_BUILD_CONFIG_FILE}" "AK24_ASAN_FLAGS=\n")
+endif()
+if(AK24_GC_ENABLED)
+    file(APPEND "${AK24_BUILD_CONFIG_FILE}" "AK24_GC_ENABLED=1\n")
+else()
+    file(APPEND "${AK24_BUILD_CONFIG_FILE}" "AK24_GC_ENABLED=0\n")
+endif()
+install(FILES "${AK24_BUILD_CONFIG_FILE}" DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
 
 # Add uninstall target
 if(NOT TARGET uninstall)

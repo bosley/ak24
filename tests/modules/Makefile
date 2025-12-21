@@ -15,12 +15,24 @@ ifeq (,$(wildcard $(AK24_HOME)/include/ak24/kernel.h))
     $(error AK24 not found at $(AK24_HOME). Please install AK24 first with 'make install')
 endif
 
+# Load AK24 build configuration if available
+-include $(AK24_HOME)/lib/ak24-config.mk
+
 # Compiler and flags
 CC = cc
 CFLAGS = -std=c11 -Wall -Wextra -O2
 INCLUDES = -I$(AK24_HOME)/include
 LDFLAGS = -L$(AK24_HOME)/lib
-LIBS = -lak24_kernel -lgc
+LIBS = -lak24_kernel
+
+# Add ASAN flags if AK24 was built with ASAN
+ifeq ($(AK24_ASAN_ENABLED),1)
+    CFLAGS += $(AK24_ASAN_FLAGS)
+    LDFLAGS += $(AK24_ASAN_FLAGS)
+    $(info Building with AddressSanitizer support)
+else
+    LIBS += -lgc
+endif
 
 # macOS-specific: Add rpath for finding dylib
 UNAME_S := $(shell uname -s)

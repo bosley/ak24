@@ -12,6 +12,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AK24_HOME="${AK24_HOME:-${HOME}/.ak24}"
+AK24_BUILD_MODE="${AK24_BUILD_MODE:-gc}"
 
 # Color codes for output
 RED='\033[0;31m'
@@ -33,8 +34,12 @@ print_usage() {
     echo "  test       Run full test suite (compile-time + integration tests)"
     echo ""
     echo "Environment:"
-    echo "  AK24_HOME  Installation directory (default: ~/.ak24)"
-    echo "             Current: ${AK24_HOME}"
+    echo "  AK24_HOME        Installation directory (default: ~/.ak24)"
+    echo "                   Current: ${AK24_HOME}"
+    echo "  AK24_BUILD_MODE  Build mode: 'gc' or 'asan' (default: gc)"
+    echo "                   Current: ${AK24_BUILD_MODE}"
+    echo "                   - gc:   Build with Boehm GC (garbage collection)"
+    echo "                   - asan: Build with AddressSanitizer (memory debugging)"
     echo ""
 }
 
@@ -47,12 +52,40 @@ check_installed() {
     fi
 }
 
+configure_build() {
+    echo -e "${BLUE}Configuring build (mode: ${AK24_BUILD_MODE})...${NC}"
+
+    # Validate build mode
+    if [[ "${AK24_BUILD_MODE}" != "gc" ]] && [[ "${AK24_BUILD_MODE}" != "asan" ]]; then
+        echo -e "${RED}✗ Invalid AK24_BUILD_MODE: ${AK24_BUILD_MODE}${NC}"
+        echo "Valid options: gc, asan"
+        exit 1
+    fi
+
+    mkdir -p "${SCRIPT_DIR}/build"
+    cd "${SCRIPT_DIR}/build"
+
+    # Set CMake flags based on build mode
+    CMAKE_FLAGS="-DCMAKE_INSTALL_PREFIX=${AK24_HOME}"
+
+    if [[ "${AK24_BUILD_MODE}" == "asan" ]]; then
+        CMAKE_FLAGS="${CMAKE_FLAGS} -DAK24_BUILD_ASAN=ON"
+        echo -e "  ${YELLOW}→ AddressSanitizer enabled (GC auto-disabled)${NC}"
+    else
+        CMAKE_FLAGS="${CMAKE_FLAGS} -DAK24_BUILD_ASAN=OFF"
+        echo -e "  ${GREEN}→ Boehm GC enabled${NC}"
+    fi
+
+    cmake ${CMAKE_FLAGS} ..
+    echo ""
+}
+
 cmd_preflight() {
     echo "========================================="
     echo "AK24 Preflight Check"
     echo "========================================="
     echo ""
-    
+
     # Detect platform
     UNAME_S=$(uname -s)
     if [[ "${UNAME_S}" == "Darwin" ]]; then
@@ -77,15 +110,15 @@ cmd_preflight() {
         echo "AK24 supports macOS and Linux only."
         exit 1
     fi
-    
+
     echo "Platform: ${PLATFORM}"
     echo "Package Manager: ${PKG_MANAGER}"
     echo ""
-    
+
     # Required dependencies from CMakeLists.txt
     DEPS_TO_INSTALL=()
     MISSING_DEPS=()
-    
+
     # Check CMake (required, minimum 3.20)
     echo -n "Checking for CMake... "
     if command -v cmake &> /dev/null; then
@@ -104,7 +137,7 @@ cmd_preflight() {
         MISSING_DEPS+=("cmake")
         DEPS_TO_INSTALL+=("cmake")
     fi
-    
+
     # Check C compiler
     echo -n "Checking for C compiler... "
     if command -v cc &> /dev/null || command -v gcc &> /dev/null || command -v clang &> /dev/null; then
@@ -130,7 +163,7 @@ cmd_preflight() {
             DEPS_TO_INSTALL+=("base-devel")
         fi
     fi
-    
+
     # Check Git (required by FetchContent for bdwgc)
     echo -n "Checking for Git... "
     if command -v git &> /dev/null; then
@@ -141,7 +174,7 @@ cmd_preflight() {
         MISSING_DEPS+=("git")
         DEPS_TO_INSTALL+=("git")
     fi
-    
+
     # Check Make
     echo -n "Checking for Make... "
     if command -v make &> /dev/null; then
@@ -154,7 +187,7 @@ cmd_preflight() {
             DEPS_TO_INSTALL+=("make")
         fi
     fi
-    
+
     # Check Doxygen (optional, for documentation)
     echo -n "Checking for Doxygen (optional)... "
     if command -v doxygen &> /dev/null; then
@@ -163,9 +196,9 @@ cmd_preflight() {
     else
         echo -e "${YELLOW}⚠ not found (documentation will not be built)${NC}"
     fi
-    
+
     echo ""
-    
+
     # Summary
     if [[ ${#MISSING_DEPS[@]} -eq 0 ]]; then
         echo "========================================="
@@ -177,7 +210,7 @@ cmd_preflight() {
         echo ""
         exit 0
     fi
-    
+
     echo "========================================="
     echo -e "${YELLOW}Missing Dependencies${NC}"
     echo "========================================="
@@ -185,21 +218,21 @@ cmd_preflight() {
         echo "  - ${dep}"
     done
     echo ""
-    
+
     # Offer to install
     if [[ ${#DEPS_TO_INSTALL[@]} -gt 0 ]] && [[ "${PKG_MANAGER}" != "unknown" ]]; then
         echo "Install missing dependencies? [Y/n] "
         read -r response
-        
+
         if [[ "${response}" =~ ^[Nn]$ ]]; then
             echo "Installation cancelled."
             exit 0
         fi
-        
+
         echo ""
         echo -e "${BLUE}Installing dependencies...${NC}"
         echo ""
-        
+
         if [[ "${PLATFORM}" == "macOS" ]]; then
             # Check if Homebrew is installed
             if ! command -v brew &> /dev/null; then
@@ -209,7 +242,7 @@ cmd_preflight() {
                 echo '  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
                 exit 1
             fi
-            
+
             for dep in "${DEPS_TO_INSTALL[@]}"; do
                 echo "Installing ${dep}..."
                 brew install "${dep}" || true
@@ -237,7 +270,7 @@ cmd_preflight() {
                 sudo pacman -S --noconfirm "${dep}" || true
             done
         fi
-        
+
         echo ""
         echo "========================================="
         echo -e "${GREEN}✓ Dependencies installed${NC}"
@@ -313,6 +346,8 @@ cmd_install() {
     echo "Installing AK24"
     echo "========================================="
     echo ""
+    echo "Build mode: ${AK24_BUILD_MODE}"
+    echo ""
 
     cd "${SCRIPT_DIR}"
 
@@ -321,9 +356,15 @@ cmd_install() {
     make clean
     echo ""
 
-    # Step 2: Build documentation
-    echo -e "${BLUE}Step 2: Building documentation...${NC}"
+    # Step 2: Configure build
+    echo -e "${BLUE}Step 2: Configuring CMake...${NC}"
+    configure_build
+    echo ""
+
+    # Step 3: Build documentation
+    echo -e "${BLUE}Step 3: Building documentation...${NC}"
     if command -v doxygen &> /dev/null; then
+        cd "${SCRIPT_DIR}"
         make docs
         echo -e "${GREEN}✓ Documentation built successfully${NC}"
     else
@@ -331,8 +372,8 @@ cmd_install() {
     fi
     echo ""
 
-    # Step 3: Install
-    echo -e "${BLUE}Step 3: Building and installing AK24...${NC}"
+    # Step 4: Install
+    echo -e "${BLUE}Step 4: Building and installing AK24...${NC}"
     echo ""
     echo "This may require sudo privileges for system installation."
     echo "If AK24_HOME is set to a user directory, sudo is not needed."
@@ -340,9 +381,11 @@ cmd_install() {
 
     if [[ "${AK24_HOME}" == "${HOME}/.ak24" ]] || [[ "${AK24_HOME}" == ${HOME}/* ]]; then
         # User installation, no sudo needed
+        cd "${SCRIPT_DIR}"
         make install
     else
         # System installation, may need sudo
+        cd "${SCRIPT_DIR}"
         if [[ $EUID -ne 0 ]]; then
             echo "System installation detected, you may be prompted for password..."
             sudo make install
@@ -385,17 +428,24 @@ cmd_test() {
     echo "Running Full AK24 Test Suite"
     echo "========================================="
     echo ""
+    echo "Build mode: ${AK24_BUILD_MODE}"
+    echo ""
 
     cd "${SCRIPT_DIR}"
 
-    # Step 1: Clean and install
-    echo -e "${BLUE}Step 1: Clean build and install...${NC}"
-    echo ""
-
+    # Step 1: Clean build
+    echo -e "${BLUE}Step 1: Cleaning previous builds...${NC}"
     make clean
     echo ""
 
-    echo "Installing AK24 (this will also run compile-time tests)..."
+    # Step 2: Configure build
+    echo -e "${BLUE}Step 2: Configuring CMake...${NC}"
+    configure_build
+    echo ""
+
+    # Step 3: Build and install
+    echo -e "${BLUE}Step 3: Building and installing AK24...${NC}"
+    echo "This will also run compile-time tests..."
     echo ""
 
     if [[ "${AK24_HOME}" == "${HOME}/.ak24" ]] || [[ "${AK24_HOME}" == ${HOME}/* ]]; then
@@ -419,8 +469,8 @@ cmd_test() {
     echo -e "${GREEN}✓ AK24 installed successfully${NC}"
     echo ""
 
-    # Step 2: Run compile-time tests
-    echo -e "${BLUE}Step 2: Running compile-time tests...${NC}"
+    # Step 4: Run compile-time tests
+    echo -e "${BLUE}Step 4: Running compile-time tests...${NC}"
     echo ""
 
     make test
@@ -429,8 +479,8 @@ cmd_test() {
     echo -e "${GREEN}✓ Compile-time tests passed${NC}"
     echo ""
 
-    # Step 3: Run integration tests
-    echo -e "${BLUE}Step 3: Running integration tests...${NC}"
+    # Step 5: Run integration tests
+    echo -e "${BLUE}Step 5: Running integration tests...${NC}"
     echo ""
 
     cd "${SCRIPT_DIR}/tests"

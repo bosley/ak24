@@ -150,3 +150,13 @@ Lexical scanner for parsing integers, reals, and symbols from byte buffers. Stat
 
 </details>
 
+---
+
+## Development
+
+For developers looking to contribute to or extend AK24, please refer to the following documentation:
+
+- **[docs/kernel.md](docs/kernel.md)** - Kernel initialization, memory management, threading abstractions, and application framework
+- **[docs/platform.md](docs/platform.md)** - Platform abstraction layer architecture showing how AK24 maps to POSIX/Windows implementations
+- **[docs/testing.md](docs/testing.md)** - Testing strategy for GC, ASAN, and manual memory configurations
+

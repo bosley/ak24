@@ -22,6 +22,71 @@ extern char *ak24_kernel_lock_file_path;
 void ak_print_warning(const char *format, ...);
 #endif
 
+/**
+ * @brief Helper function to get null-terminated C string from buffer
+ * @param buf Buffer to convert
+ * @return Allocated null-terminated string (caller must free with AK24_FREE)
+ */
+static char *buffer_to_cstr_safe(ak_buffer_t *buf) {
+  if (!buf) {
+    return NULL;
+  }
+  size_t len = ak_buffer_count(buf);
+  uint8_t *data = ak_buffer_data(buf);
+  char *str = AK24_ALLOC_ATOMIC(len + 1);
+  if (!str) {
+    return NULL;
+  }
+  memcpy(str, data, len);
+  str[len] = '\0';
+  return str;
+}
+
+/**
+ * @brief Remove lock file with sanity check (shared between GC/no-GC versions)
+ */
+static void cleanup_lock_file(void) {
+  if (!ak24_kernel_lock_file_path) {
+    return;
+  }
+
+  // Verify the lock file is in the expected runtime directory
+  ak_buffer_t *data_dir = ak_filepath_data();
+  if (data_dir) {
+    char *data_dir_str = buffer_to_cstr_safe(data_dir);
+    ak_buffer_free(data_dir);
+
+    if (data_dir_str) {
+      ak_buffer_t *expected_runtime_dir =
+          ak_filepath_join(3, data_dir_str, "ak24", "runtime");
+      AK24_FREE(data_dir_str);
+
+      if (expected_runtime_dir) {
+        char *expected_path = buffer_to_cstr_safe(expected_runtime_dir);
+        ak_buffer_free(expected_runtime_dir);
+
+        if (expected_path) {
+          size_t expected_len = strlen(expected_path);
+
+          // Check if lock file path starts with expected runtime directory
+          if (strncmp(ak24_kernel_lock_file_path, expected_path,
+                      expected_len) == 0) {
+            remove(ak24_kernel_lock_file_path);
+          } else {
+            fprintf(stderr, "AK24 Warning: Lock file path not in expected "
+                            "location, skipping removal\n");
+            fprintf(stderr, "  Expected prefix: %s\n", expected_path);
+            fprintf(stderr, "  Actual path: %s\n", ak24_kernel_lock_file_path);
+          }
+          AK24_FREE(expected_path);
+        }
+      }
+    }
+  }
+  free(ak24_kernel_lock_file_path);
+  ak24_kernel_lock_file_path = NULL;
+}
+
 static list_void_t shutdown_lambdas;
 static int shutdown_lambdas_initialized = 0;
 static time_t kernel_start_time;
@@ -68,35 +133,7 @@ void ak_kernel_deinit(void) {
   }
 
   // Remove lock file with sanity check (before filepath shutdown)
-  if (ak24_kernel_lock_file_path) {
-    // Verify the lock file is in the expected runtime directory
-    ak_buffer_t *data_dir = ak_filepath_data();
-    if (data_dir) {
-      ak_buffer_t *expected_runtime_dir = ak_filepath_join(
-          3, (const char *)ak_buffer_data(data_dir), "ak24", "runtime");
-      ak_buffer_free(data_dir);
-
-      if (expected_runtime_dir) {
-        const char *expected_path =
-            (const char *)ak_buffer_data(expected_runtime_dir);
-        size_t expected_len = strlen(expected_path);
-
-        // Check if lock file path starts with expected runtime directory
-        if (strncmp(ak24_kernel_lock_file_path, expected_path, expected_len) ==
-            0) {
-          remove(ak24_kernel_lock_file_path);
-        } else {
-          fprintf(stderr, "AK24 Warning: Lock file path not in expected "
-                          "location, skipping removal\n");
-          fprintf(stderr, "  Expected prefix: %s\n", expected_path);
-          fprintf(stderr, "  Actual path: %s\n", ak24_kernel_lock_file_path);
-        }
-        ak_buffer_free(expected_runtime_dir);
-      }
-    }
-    free(ak24_kernel_lock_file_path);
-    ak24_kernel_lock_file_path = NULL;
-  }
+  cleanup_lock_file();
 
   ak_signal_handlers_deinit();
   ak_filepath_shutdown();
@@ -147,35 +184,7 @@ void ak_kernel_deinit(void) {
   }
 
   // Remove lock file with sanity check (before filepath shutdown)
-  if (ak24_kernel_lock_file_path) {
-    // Verify the lock file is in the expected runtime directory
-    ak_buffer_t *data_dir = ak_filepath_data();
-    if (data_dir) {
-      ak_buffer_t *expected_runtime_dir = ak_filepath_join(
-          3, (const char *)ak_buffer_data(data_dir), "ak24", "runtime");
-      ak_buffer_free(data_dir);
-
-      if (expected_runtime_dir) {
-        const char *expected_path =
-            (const char *)ak_buffer_data(expected_runtime_dir);
-        size_t expected_len = strlen(expected_path);
-
-        // Check if lock file path starts with expected runtime directory
-        if (strncmp(ak24_kernel_lock_file_path, expected_path, expected_len) ==
-            0) {
-          remove(ak24_kernel_lock_file_path);
-        } else {
-          fprintf(stderr, "AK24 Warning: Lock file path not in expected "
-                          "location, skipping removal\n");
-          fprintf(stderr, "  Expected prefix: %s\n", expected_path);
-          fprintf(stderr, "  Actual path: %s\n", ak24_kernel_lock_file_path);
-        }
-        ak_buffer_free(expected_runtime_dir);
-      }
-    }
-    free(ak24_kernel_lock_file_path);
-    ak24_kernel_lock_file_path = NULL;
-  }
+  cleanup_lock_file();
 
   ak_signal_handlers_deinit();
   ak_filepath_shutdown();

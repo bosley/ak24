@@ -45,11 +45,23 @@ fi
 
 echo "Using AK24 from: ${AK24_HOME}"
 
+# Check if AK24 was built with ASAN
+ASAN_FLAGS=""
+if [[ -f "${AK24_HOME}/lib/ak24-config.mk" ]]; then
+    # Source the config to get ASAN settings
+    source <(grep -E '^(AK24_ASAN_ENABLED|AK24_ASAN_FLAGS)=' "${AK24_HOME}/lib/ak24-config.mk")
+    if [[ "${AK24_ASAN_ENABLED}" == "1" ]]; then
+        ASAN_FLAGS="${AK24_ASAN_FLAGS}"
+        echo "Detected ASAN build, adding flags: ${ASAN_FLAGS}"
+    fi
+fi
+
 # Compile the shared library
 echo "Compiling lib.c..."
 cc -std=c11 -Wall -Wextra -O2 \
     ${SHARED_FLAG} \
     -fPIC \
+    ${ASAN_FLAGS} \
     -I"${LIB_DIR}" \
     -I"${AK24_HOME}/include/ak24" \
     -o "${OUTPUT}" \

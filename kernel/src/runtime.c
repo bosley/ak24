@@ -109,8 +109,21 @@ int init_runtime_directory(const char *app_id) {
     exit(1);
   }
 
-  ak_buffer_t *runtime_dir = ak_filepath_join(
-      3, (const char *)ak_buffer_data(data_dir), "ak24", "runtime");
+  // Ensure data_dir is null-terminated for use as C string
+  size_t data_dir_len = ak_buffer_count(data_dir);
+  uint8_t *data_dir_data = ak_buffer_data(data_dir);
+  char *data_dir_str = AK24_ALLOC_ATOMIC(data_dir_len + 1);
+  if (!data_dir_str) {
+    fprintf(stderr, "AK24 Error: Memory allocation failed\n");
+    ak_buffer_free(data_dir);
+    exit(1);
+  }
+  memcpy(data_dir_str, data_dir_data, data_dir_len);
+  data_dir_str[data_dir_len] = '\0';
+
+  ak_buffer_t *runtime_dir =
+      ak_filepath_join(3, data_dir_str, "ak24", "runtime");
+  AK24_FREE(data_dir_str);
   ak_buffer_free(data_dir);
 
   if (!runtime_dir) {
@@ -118,10 +131,22 @@ int init_runtime_directory(const char *app_id) {
     exit(1);
   }
 
-  const char *dir_path = (const char *)ak_buffer_data(runtime_dir);
+  // Ensure runtime_dir is null-terminated for use as C string
+  size_t runtime_dir_len = ak_buffer_count(runtime_dir);
+  uint8_t *runtime_dir_data = ak_buffer_data(runtime_dir);
+  char *dir_path = AK24_ALLOC_ATOMIC(runtime_dir_len + 1);
+  if (!dir_path) {
+    fprintf(stderr, "AK24 Error: Memory allocation failed\n");
+    ak_buffer_free(runtime_dir);
+    exit(1);
+  }
+  memcpy(dir_path, runtime_dir_data, runtime_dir_len);
+  dir_path[runtime_dir_len] = '\0';
+
   if (mkdir_recursive(dir_path) != 0 && errno != EEXIST) {
     fprintf(stderr, "AK24 Error: Failed to create runtime directory '%s': %s\n",
             dir_path, strerror(errno));
+    AK24_FREE(dir_path);
     ak_buffer_free(runtime_dir);
     exit(1);
   }
@@ -132,6 +157,7 @@ int init_runtime_directory(const char *app_id) {
            (unsigned long long)hash);
 
   ak_buffer_t *lock_path = ak_filepath_join(2, dir_path, hash_filename);
+  AK24_FREE(dir_path);
   ak_buffer_free(runtime_dir);
 
   if (!lock_path) {
@@ -139,7 +165,17 @@ int init_runtime_directory(const char *app_id) {
     exit(1);
   }
 
-  const char *lock_file = (const char *)ak_buffer_data(lock_path);
+  // Ensure lock_path is null-terminated for use as C string
+  size_t lock_path_len = ak_buffer_count(lock_path);
+  uint8_t *lock_path_data = ak_buffer_data(lock_path);
+  char *lock_file = AK24_ALLOC_ATOMIC(lock_path_len + 1);
+  if (!lock_file) {
+    fprintf(stderr, "AK24 Error: Memory allocation failed\n");
+    ak_buffer_free(lock_path);
+    exit(1);
+  }
+  memcpy(lock_file, lock_path_data, lock_path_len);
+  lock_file[lock_path_len] = '\0';
 
   int skip_lock_check = (strcmp(app_id, "ak24-test") == 0);
 
@@ -164,6 +200,7 @@ int init_runtime_directory(const char *app_id) {
                 "AK24 Error: Application '%s' is already running (PID: %ld)\n",
                 line1, (long)existing_pid);
         fprintf(stderr, "AK24 Error: Lock file: '%s'\n", lock_file);
+        AK24_FREE(lock_file);
         ak_buffer_free(lock_path);
         exit(1);
       }
@@ -180,6 +217,7 @@ int init_runtime_directory(const char *app_id) {
   if (!f) {
     fprintf(stderr, "AK24 Error: Failed to create lock file '%s': %s\n",
             lock_file, strerror(errno));
+    AK24_FREE(lock_file);
     ak_buffer_free(lock_path);
     exit(1);
   }
@@ -189,6 +227,7 @@ int init_runtime_directory(const char *app_id) {
   fclose(f);
 
   ak24_kernel_lock_file_path = strdup(lock_file);
+  AK24_FREE(lock_file);
   ak_buffer_free(lock_path);
 
   return 0;

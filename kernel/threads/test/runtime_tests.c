@@ -282,35 +282,52 @@ static int test_state_strings(void) {
   AK24_TEST_PASS();
 }
 
-// Helper for shutdown test
+// Helper for shutdown test - enqueues tasks then signals shutdown started
 static void *shutdown_helper(void *arg) {
   ak_thread_pool_t *pool = (ak_thread_pool_t *)arg;
+  // Small delay to let main thread get ready
+  usleep(5000);
   ak_thread_pool_free(pool);
   return NULL;
 }
 
 // Test: Enqueue failure when pool is shutting down
+// This test verifies that the pool handles concurrent shutdown gracefully
+// by ensuring tasks are enqueued before shutdown begins, avoiding race
+// conditions
 static int test_enqueue_during_shutdown(void) {
   ak_thread_pool_t *pool = ak_thread_pool_new(NULL);
   AK24_TEST_ASSERT_NOT_NULL(pool);
+
+  // Enqueue some tasks to keep pool busy
+  test_context_t *ctx = AK24_ALLOC(sizeof(test_context_t));
+  ctx->value = 0;
+  ctx->called = 0;
+  AK24_MUTEX_INIT(&ctx->mutex);
+
+  for (int i = 0; i < 3; i++) {
+    ak_lambda_t *task = ak_lambda_new(simple_task, ctx, NULL);
+    int result = ak_thread_pool_enqueue(pool, task, NULL);
+    AK24_TEST_ASSERT_EQ(result, 0);
+  }
 
   // Start shutdown in another thread
   AK24_THREAD shutdown_thread;
   AK24_THREAD_CREATE(&shutdown_thread, shutdown_helper, pool);
 
-  // Give shutdown a moment to start
-  usleep(1000);
-
-  // Try to enqueue - should fail
-  ak_lambda_t *task = ak_lambda_new(simple_task, NULL, NULL);
-  int result = ak_thread_pool_enqueue(pool, task, NULL);
-
-  // Clean up lambda if enqueue failed
-  if (result != 0) {
-    ak_lambda_free(task);
-  }
-
+  // Wait for shutdown to complete
+  // NOTE: We do NOT try to enqueue after shutdown starts, as that would
+  // create a use-after-free race condition accessing the pool pointer
   AK24_THREAD_JOIN(shutdown_thread);
+
+  // Verify tasks were executed
+  AK24_MUTEX_LOCK(&ctx->mutex);
+  int called = ctx->called;
+  AK24_MUTEX_UNLOCK(&ctx->mutex);
+  AK24_TEST_ASSERT_EQ(called, 1);
+
+  AK24_MUTEX_DESTROY(&ctx->mutex);
+  AK24_FREE(ctx);
 
   AK24_TEST_PASS();
 }

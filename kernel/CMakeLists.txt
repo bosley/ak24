@@ -157,6 +157,18 @@ if(AK24_GC_ENABLED)
     endif()
 endif()
 
+# Apply ASAN flags if enabled
+if(AK24_BUILD_ASAN)
+    target_compile_options(ak24_kernel PUBLIC
+        -fsanitize=address
+        -fno-omit-frame-pointer
+        -g
+    )
+    target_link_options(ak24_kernel PUBLIC
+        -fsanitize=address
+    )
+endif()
+
 # Platform-specific threading libraries
 if(UNIX OR APPLE)
     target_link_libraries(ak24_kernel PUBLIC pthread)

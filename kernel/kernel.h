@@ -23,6 +23,7 @@
 #define AK24_KERNEL_H
 
 #include "arbuff.h"
+#include "arena.h"
 #include "atom.h"
 #include "buffer.h"
 #include "context.h"

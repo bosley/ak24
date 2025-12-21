@@ -1,6 +1,6 @@
-# AK24 Kernel - AI Agent Quick Reference
+# AK24 Kernel - Quick Reference
 
-**Purpose**: This document enables AI assistants to build applications with AK24 without using incorrect memory allocation patterns.
+**Purpose**: This document is to help a new developer using the library get up and running by explaining the overall concepts that the library provides.ß
 
 ---
 

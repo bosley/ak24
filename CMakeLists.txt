@@ -108,9 +108,11 @@ endif()
 add_subdirectory(kernel)
 
 add_subdirectory(examples/ak24-cli)
+add_subdirectory(examples/arena-demo)
 add_subdirectory(examples/atom-cube-demo)
 add_subdirectory(examples/thread-pool-demo)
 add_subdirectory(examples/signals-example)
+add_subdirectory(examples/sourceloc-demo)
 
 # Add uninstall target
 if(NOT TARGET uninstall)

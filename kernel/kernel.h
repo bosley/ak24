@@ -23,17 +23,20 @@
 #define AK24_KERNEL_H
 
 #include "arbuff.h"
+#include "arena.h"
 #include "atom.h"
 #include "buffer.h"
 #include "context.h"
 #include "forms.h"
 #include "forms_primitives.h"
 #include "interfaces.h"
+#include "intern.h"
 #include "lambda.h"
 #include "list.h"
 #include "log.h"
 #include "map.h"
 #include "scanner.h"
+#include "sourceloc.h"
 
 #include <stddef.h>
 #include <time.h>

@@ -31,6 +31,8 @@ void ak_kernel_init(void) {
 #endif
   GC_set_warn_proc(GC_ignore_warn_proc);
   GC_INIT();
+  ak_intern_init();
+  ak_sourceloc_init();
   list_init(&shutdown_lambdas);
   shutdown_lambdas_initialized = 1;
   ak_signal_handlers_init();
@@ -56,6 +58,8 @@ void ak_kernel_deinit(void) {
     shutdown_lambdas_initialized = 0;
   }
   ak_signal_handlers_deinit();
+  ak_sourceloc_shutdown();
+  ak_intern_shutdown();
   sched_yield();
   sched_yield();
 }
@@ -70,6 +74,8 @@ void ak_kernel_init(void) {
   ak_print_warning("Please report any issues to the development team\n");
   ak_print_warning("***************\n\n");
 #endif
+  ak_intern_init();
+  ak_sourceloc_init();
   list_init(&shutdown_lambdas);
   shutdown_lambdas_initialized = 1;
   ak_signal_handlers_init();
@@ -95,6 +101,8 @@ void ak_kernel_deinit(void) {
     shutdown_lambdas_initialized = 0;
   }
   ak_signal_handlers_deinit();
+  ak_sourceloc_shutdown();
+  ak_intern_shutdown();
 }
 
 #endif

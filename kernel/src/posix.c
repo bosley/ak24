@@ -14,16 +14,16 @@ typedef struct {
 
 static list_void_t signal_handlers;
 static int signal_handlers_initialized = 0;
-static AK_MUTEX signal_mutex = AK_MUTEX_INITIALIZER;
+static AK24_MUTEX signal_mutex = AK24_MUTEX_INITIALIZER;
 
 // Forward declarations
 static void ak_signal_dispatch(int signum);
 
 static void ak_signal_dispatch(int signum) {
-  AK_MUTEX_LOCK(&signal_mutex);
+  AK24_MUTEX_LOCK(&signal_mutex);
 
   if (!signal_handlers_initialized) {
-    AK_MUTEX_UNLOCK(&signal_mutex);
+    AK24_MUTEX_UNLOCK(&signal_mutex);
     return;
   }
 
@@ -41,7 +41,7 @@ static void ak_signal_dispatch(int signum) {
     }
   }
 
-  AK_MUTEX_UNLOCK(&signal_mutex);
+  AK24_MUTEX_UNLOCK(&signal_mutex);
 }
 
 void ak_register_signal_handler(int signum, ak_lambda_t *handler) {
@@ -49,7 +49,7 @@ void ak_register_signal_handler(int signum, ak_lambda_t *handler) {
     return;
   }
 
-  AK_MUTEX_LOCK(&signal_mutex);
+  AK24_MUTEX_LOCK(&signal_mutex);
 
   // Check if handler already exists for this signal
   list_iter_t iter = list_iter(&signal_handlers);
@@ -59,7 +59,7 @@ void ak_register_signal_handler(int signum, ak_lambda_t *handler) {
     if (entry && entry->signum == signum) {
       // Update existing handler
       entry->handler = handler;
-      AK_MUTEX_UNLOCK(&signal_mutex);
+      AK24_MUTEX_UNLOCK(&signal_mutex);
       return;
     }
   }
@@ -68,7 +68,7 @@ void ak_register_signal_handler(int signum, ak_lambda_t *handler) {
   ak_signal_handler_entry_t *entry =
       AK24_ALLOC(sizeof(ak_signal_handler_entry_t));
   if (!entry) {
-    AK_MUTEX_UNLOCK(&signal_mutex);
+    AK24_MUTEX_UNLOCK(&signal_mutex);
     return;
   }
 
@@ -85,14 +85,14 @@ void ak_register_signal_handler(int signum, ak_lambda_t *handler) {
     list_push(&signal_handlers, entry);
   }
 
-  AK_MUTEX_UNLOCK(&signal_mutex);
+  AK24_MUTEX_UNLOCK(&signal_mutex);
 }
 
 void ak_unregister_signal_handler(int signum) {
-  AK_MUTEX_LOCK(&signal_mutex);
+  AK24_MUTEX_LOCK(&signal_mutex);
 
   if (!signal_handlers_initialized) {
-    AK_MUTEX_UNLOCK(&signal_mutex);
+    AK24_MUTEX_UNLOCK(&signal_mutex);
     return;
   }
 
@@ -116,7 +116,7 @@ void ak_unregister_signal_handler(int signum) {
     list_remove_(&signal_handlers.base, index);
   }
 
-  AK_MUTEX_UNLOCK(&signal_mutex);
+  AK24_MUTEX_UNLOCK(&signal_mutex);
 }
 
 void ak_signal_handlers_init(void) {
@@ -129,7 +129,7 @@ void ak_signal_handlers_deinit(void) {
     return;
   }
 
-  AK_MUTEX_LOCK(&signal_mutex);
+  AK24_MUTEX_LOCK(&signal_mutex);
 
   // Restore all signal handlers
   list_iter_t iter = list_iter(&signal_handlers);
@@ -144,33 +144,33 @@ void ak_signal_handlers_deinit(void) {
   list_deinit(&signal_handlers);
   signal_handlers_initialized = 0;
 
-  AK_MUTEX_UNLOCK(&signal_mutex);
+  AK24_MUTEX_UNLOCK(&signal_mutex);
 }
 
 // Mutex implementations
 
-int AK_mutex_init(AK_MUTEX *mutex) {
+int AK24_mutex_init(AK24_MUTEX *mutex) {
   if (!mutex) {
     return -1;
   }
   return pthread_mutex_init(&mutex->handle, NULL);
 }
 
-int AK_mutex_destroy(AK_MUTEX *mutex) {
+int AK24_mutex_destroy(AK24_MUTEX *mutex) {
   if (!mutex) {
     return -1;
   }
   return pthread_mutex_destroy(&mutex->handle);
 }
 
-int AK_mutex_lock(AK_MUTEX *mutex) {
+int AK24_mutex_lock(AK24_MUTEX *mutex) {
   if (!mutex) {
     return -1;
   }
   return pthread_mutex_lock(&mutex->handle);
 }
 
-int AK_mutex_unlock(AK_MUTEX *mutex) {
+int AK24_mutex_unlock(AK24_MUTEX *mutex) {
   if (!mutex) {
     return -1;
   }
@@ -179,35 +179,35 @@ int AK_mutex_unlock(AK_MUTEX *mutex) {
 
 // Condition variable implementations
 
-int AK_cond_init(AK_COND *cond) {
+int AK24_cond_init(AK24_COND *cond) {
   if (!cond) {
     return -1;
   }
   return pthread_cond_init(&cond->handle, NULL);
 }
 
-int AK_cond_destroy(AK_COND *cond) {
+int AK24_cond_destroy(AK24_COND *cond) {
   if (!cond) {
     return -1;
   }
   return pthread_cond_destroy(&cond->handle);
 }
 
-int AK_cond_wait(AK_COND *cond, AK_MUTEX *mutex) {
+int AK24_cond_wait(AK24_COND *cond, AK24_MUTEX *mutex) {
   if (!cond || !mutex) {
     return -1;
   }
   return pthread_cond_wait(&cond->handle, &mutex->handle);
 }
 
-int AK_cond_signal(AK_COND *cond) {
+int AK24_cond_signal(AK24_COND *cond) {
   if (!cond) {
     return -1;
   }
   return pthread_cond_signal(&cond->handle);
 }
 
-int AK_cond_broadcast(AK_COND *cond) {
+int AK24_cond_broadcast(AK24_COND *cond) {
   if (!cond) {
     return -1;
   }
@@ -216,8 +216,8 @@ int AK_cond_broadcast(AK_COND *cond) {
 
 // Thread implementations
 
-int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
-                     void *arg) {
+int AK24_THREAD_CREATE(AK24_THREAD *thread, void *(*start_routine)(void *),
+                       void *arg) {
   if (!thread || !start_routine) {
     return -1;
   }
@@ -231,10 +231,12 @@ int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
 #endif
 }
 
-int AK_THREAD_JOIN(AK_THREAD thread) {
+int AK24_THREAD_JOIN(AK24_THREAD thread) {
   return pthread_join(thread.handle, NULL);
 }
 
-int AK_THREAD_DETACH(AK_THREAD thread) { return pthread_detach(thread.handle); }
+int AK24_THREAD_DETACH(AK24_THREAD thread) {
+  return pthread_detach(thread.handle);
+}
 
 #endif // AK24_PLATFORM_POSIX

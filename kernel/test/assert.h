@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static AK_MUTEX ak24_test_mutex = AK_MUTEX_INITIALIZER;
+static AK24_MUTEX ak24_test_mutex = AK24_MUTEX_INITIALIZER;
 
 #define AK24_TEST_ASSERT(expr)                                                 \
   do {                                                                         \
@@ -90,10 +90,10 @@ static AK_MUTEX ak24_test_mutex = AK_MUTEX_INITIALIZER;
 #define AK24_TEST_ASSERT_ATOMIC(expr)                                          \
   do {                                                                         \
     if (!(expr)) {                                                             \
-      AK_MUTEX_LOCK(&ak24_test_mutex);                                         \
+      AK24_MUTEX_LOCK(&ak24_test_mutex);                                       \
       fprintf(stderr, "[FAIL] %s:%d: Assertion failed: %s\n", __FILE__,        \
               __LINE__, #expr);                                                \
-      AK_MUTEX_UNLOCK(&ak24_test_mutex);                                       \
+      AK24_MUTEX_UNLOCK(&ak24_test_mutex);                                     \
       exit(1);                                                                 \
     }                                                                          \
   } while (0)
@@ -101,10 +101,10 @@ static AK_MUTEX ak24_test_mutex = AK_MUTEX_INITIALIZER;
 #define AK24_TEST_ASSERT_EQ_ATOMIC(a, b)                                       \
   do {                                                                         \
     if ((a) != (b)) {                                                          \
-      AK_MUTEX_LOCK(&ak24_test_mutex);                                         \
+      AK24_MUTEX_LOCK(&ak24_test_mutex);                                       \
       fprintf(stderr, "[FAIL] %s:%d: Expected %s == %s\n", __FILE__, __LINE__, \
               #a, #b);                                                         \
-      AK_MUTEX_UNLOCK(&ak24_test_mutex);                                       \
+      AK24_MUTEX_UNLOCK(&ak24_test_mutex);                                     \
       exit(1);                                                                 \
     }                                                                          \
   } while (0)

@@ -156,14 +156,14 @@ const char *ak_log_level_string(ak_log_level_t level);
  *
  * @par Example:
  * @code
- * AK_MUTEX log_mutex = AK_MUTEX_INITIALIZER;
+ * AK24_MUTEX log_mutex = AK24_MUTEX_INITIALIZER;
  *
  * void log_lock(bool lock, void *udata) {
- *   AK_MUTEX *mtx = (AK_MUTEX *)udata;
+ *   AK24_MUTEX *mtx = (AK24_MUTEX *)udata;
  *   if (lock) {
- *     AK_MUTEX_LOCK(mtx);
+ *     AK24_MUTEX_LOCK(mtx);
  *   } else {
- *     AK_MUTEX_UNLOCK(mtx);
+ *     AK24_MUTEX_UNLOCK(mtx);
  *   }
  * }
  *

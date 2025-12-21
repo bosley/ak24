@@ -60,58 +60,58 @@
 #endif
 
 /**
- * @def AK_MUTEX_INIT
+ * @def AK24_MUTEX_INIT
  * @brief Initialize a mutex at runtime
  */
-#define AK_MUTEX_INIT(m) AK_mutex_init(m)
+#define AK24_MUTEX_INIT(m) AK24_mutex_init(m)
 
 /**
- * @def AK_MUTEX_DESTROY
+ * @def AK24_MUTEX_DESTROY
  * @brief Destroy a mutex
  */
-#define AK_MUTEX_DESTROY(m) AK_mutex_destroy(m)
+#define AK24_MUTEX_DESTROY(m) AK24_mutex_destroy(m)
 
 /**
- * @def AK_MUTEX_LOCK
+ * @def AK24_MUTEX_LOCK
  * @brief Lock a mutex
  */
-#define AK_MUTEX_LOCK(m) AK_mutex_lock(m)
+#define AK24_MUTEX_LOCK(m) AK24_mutex_lock(m)
 
 /**
- * @def AK_MUTEX_UNLOCK
+ * @def AK24_MUTEX_UNLOCK
  * @brief Unlock a mutex
  */
-#define AK_MUTEX_UNLOCK(m) AK_mutex_unlock(m)
+#define AK24_MUTEX_UNLOCK(m) AK24_mutex_unlock(m)
 
 /**
- * @def AK_COND_INIT
+ * @def AK24_COND_INIT
  * @brief Initialize a condition variable at runtime
  */
-#define AK_COND_INIT(c) AK_cond_init(c)
+#define AK24_COND_INIT(c) AK24_cond_init(c)
 
 /**
- * @def AK_COND_DESTROY
+ * @def AK24_COND_DESTROY
  * @brief Destroy a condition variable
  */
-#define AK_COND_DESTROY(c) AK_cond_destroy(c)
+#define AK24_COND_DESTROY(c) AK24_cond_destroy(c)
 
 /**
- * @def AK_COND_WAIT
+ * @def AK24_COND_WAIT
  * @brief Wait on a condition variable
  */
-#define AK_COND_WAIT(c, m) AK_cond_wait(c, m)
+#define AK24_COND_WAIT(c, m) AK24_cond_wait(c, m)
 
 /**
- * @def AK_COND_SIGNAL
+ * @def AK24_COND_SIGNAL
  * @brief Signal one thread waiting on condition variable
  */
-#define AK_COND_SIGNAL(c) AK_cond_signal(c)
+#define AK24_COND_SIGNAL(c) AK24_cond_signal(c)
 
 /**
- * @def AK_COND_BROADCAST
+ * @def AK24_COND_BROADCAST
  * @brief Broadcast to all threads waiting on condition variable
  */
-#define AK_COND_BROADCAST(c) AK_cond_broadcast(c)
+#define AK24_COND_BROADCAST(c) AK24_cond_broadcast(c)
 
 /**
  * @brief Kernel shutdown information
@@ -162,7 +162,7 @@ typedef struct kernel_shutdown_info_s {
  *
  * @threadsafe
  */
-int AK_mutex_init(AK_MUTEX *mutex);
+int AK24_mutex_init(AK24_MUTEX *mutex);
 
 /**
  * @brief Destroy a mutex
@@ -172,7 +172,7 @@ int AK_mutex_init(AK_MUTEX *mutex);
  *
  * @threadsafe
  */
-int AK_mutex_destroy(AK_MUTEX *mutex);
+int AK24_mutex_destroy(AK24_MUTEX *mutex);
 
 /**
  * @brief Lock a mutex
@@ -182,7 +182,7 @@ int AK_mutex_destroy(AK_MUTEX *mutex);
  *
  * @threadsafe
  */
-int AK_mutex_lock(AK_MUTEX *mutex);
+int AK24_mutex_lock(AK24_MUTEX *mutex);
 
 /**
  * @brief Unlock a mutex
@@ -192,7 +192,7 @@ int AK_mutex_lock(AK_MUTEX *mutex);
  *
  * @threadsafe
  */
-int AK_mutex_unlock(AK_MUTEX *mutex);
+int AK24_mutex_unlock(AK24_MUTEX *mutex);
 
 /**
  * @brief Initialize a condition variable at runtime
@@ -202,7 +202,7 @@ int AK_mutex_unlock(AK_MUTEX *mutex);
  *
  * @threadsafe
  */
-int AK_cond_init(AK_COND *cond);
+int AK24_cond_init(AK24_COND *cond);
 
 /**
  * @brief Destroy a condition variable
@@ -212,7 +212,7 @@ int AK_cond_init(AK_COND *cond);
  *
  * @threadsafe
  */
-int AK_cond_destroy(AK_COND *cond);
+int AK24_cond_destroy(AK24_COND *cond);
 
 /**
  * @brief Wait on a condition variable
@@ -226,7 +226,7 @@ int AK_cond_destroy(AK_COND *cond);
  *
  * @threadsafe
  */
-int AK_cond_wait(AK_COND *cond, AK_MUTEX *mutex);
+int AK24_cond_wait(AK24_COND *cond, AK24_MUTEX *mutex);
 
 /**
  * @brief Signal one thread waiting on condition variable
@@ -236,7 +236,7 @@ int AK_cond_wait(AK_COND *cond, AK_MUTEX *mutex);
  *
  * @threadsafe
  */
-int AK_cond_signal(AK_COND *cond);
+int AK24_cond_signal(AK24_COND *cond);
 
 /**
  * @brief Broadcast to all threads waiting on condition variable
@@ -246,7 +246,7 @@ int AK_cond_signal(AK_COND *cond);
  *
  * @threadsafe
  */
-int AK_cond_broadcast(AK_COND *cond);
+int AK24_cond_broadcast(AK24_COND *cond);
 
 /**
  * @brief Threading functions
@@ -270,8 +270,8 @@ int AK_cond_broadcast(AK_COND *cond);
  *
  * @threadsafe
  */
-int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
-                     void *arg);
+int AK24_THREAD_CREATE(AK24_THREAD *thread, void *(*start_routine)(void *),
+                       void *arg);
 
 /**
  * @brief Join with a terminated thread
@@ -283,7 +283,7 @@ int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
  *
  * @threadsafe
  */
-int AK_THREAD_JOIN(AK_THREAD thread);
+int AK24_THREAD_JOIN(AK24_THREAD thread);
 
 /**
  * @brief Detach a thread
@@ -295,17 +295,7 @@ int AK_THREAD_JOIN(AK_THREAD thread);
  *
  * @threadsafe
  */
-int AK_THREAD_DETACH(AK_THREAD thread);
-
-/**
- * @brief Backwards compatibility macros
- *
- * @deprecated Use AK_THREAD_* functions directly instead
- */
-#define AK24_THREAD_CREATE(thread, attr, start_routine, arg)                   \
-  AK_THREAD_CREATE(thread, start_routine, arg)
-#define AK24_THREAD_JOIN(thread, retval) AK_THREAD_JOIN(thread)
-#define AK24_THREAD_DETACH(thread) AK_THREAD_DETACH(thread)
+int AK24_THREAD_DETACH(AK24_THREAD thread);
 
 /**
  * @brief Register shutdown callback

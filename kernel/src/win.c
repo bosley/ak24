@@ -61,7 +61,7 @@ void ak_signal_handlers_deinit(void) {
 
 // Mutex implementations
 
-int AK_mutex_init(AK_MUTEX *mutex) {
+int AK24_mutex_init(AK24_MUTEX *mutex) {
   if (!mutex) {
     return -1;
   }
@@ -69,7 +69,7 @@ int AK_mutex_init(AK_MUTEX *mutex) {
   return 0;
 }
 
-int AK_mutex_destroy(AK_MUTEX *mutex) {
+int AK24_mutex_destroy(AK24_MUTEX *mutex) {
   if (!mutex) {
     return -1;
   }
@@ -77,7 +77,7 @@ int AK_mutex_destroy(AK_MUTEX *mutex) {
   return 0;
 }
 
-int AK_mutex_lock(AK_MUTEX *mutex) {
+int AK24_mutex_lock(AK24_MUTEX *mutex) {
   if (!mutex) {
     return -1;
   }
@@ -85,7 +85,7 @@ int AK_mutex_lock(AK_MUTEX *mutex) {
   return 0;
 }
 
-int AK_mutex_unlock(AK_MUTEX *mutex) {
+int AK24_mutex_unlock(AK24_MUTEX *mutex) {
   if (!mutex) {
     return -1;
   }
@@ -95,7 +95,7 @@ int AK_mutex_unlock(AK_MUTEX *mutex) {
 
 // Condition variable implementations
 
-int AK_cond_init(AK_COND *cond) {
+int AK24_cond_init(AK24_COND *cond) {
   if (!cond) {
     return -1;
   }
@@ -103,7 +103,7 @@ int AK_cond_init(AK_COND *cond) {
   return 0;
 }
 
-int AK_cond_destroy(AK_COND *cond) {
+int AK24_cond_destroy(AK24_COND *cond) {
   if (!cond) {
     return -1;
   }
@@ -111,7 +111,7 @@ int AK_cond_destroy(AK_COND *cond) {
   return 0;
 }
 
-int AK_cond_wait(AK_COND *cond, AK_MUTEX *mutex) {
+int AK24_cond_wait(AK24_COND *cond, AK24_MUTEX *mutex) {
   if (!cond || !mutex) {
     return -1;
   }
@@ -119,7 +119,7 @@ int AK_cond_wait(AK_COND *cond, AK_MUTEX *mutex) {
                                                                            : -1;
 }
 
-int AK_cond_signal(AK_COND *cond) {
+int AK24_cond_signal(AK24_COND *cond) {
   if (!cond) {
     return -1;
   }
@@ -127,7 +127,7 @@ int AK_cond_signal(AK_COND *cond) {
   return 0;
 }
 
-int AK_cond_broadcast(AK_COND *cond) {
+int AK24_cond_broadcast(AK24_COND *cond) {
   if (!cond) {
     return -1;
   }
@@ -159,8 +159,8 @@ static DWORD WINAPI ak_win_thread_wrapper(LPVOID param) {
 
 // Thread implementations
 
-int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
-                     void *arg) {
+int AK24_THREAD_CREATE(AK24_THREAD *thread, void *(*start_routine)(void *),
+                       void *arg) {
   if (!thread || !start_routine) {
     return -1;
   }
@@ -198,7 +198,7 @@ int AK_THREAD_CREATE(AK_THREAD *thread, void *(*start_routine)(void *),
   return 0;
 }
 
-int AK_THREAD_JOIN(AK_THREAD thread) {
+int AK24_THREAD_JOIN(AK24_THREAD thread) {
   // Wait for Windows thread to complete
   if (thread.handle == NULL) {
     return -1;
@@ -216,7 +216,7 @@ int AK_THREAD_JOIN(AK_THREAD thread) {
   return -1;
 }
 
-int AK_THREAD_DETACH(AK_THREAD thread) {
+int AK24_THREAD_DETACH(AK24_THREAD thread) {
   // On Windows, detaching means closing the handle immediately
   // This allows the thread to clean up automatically when it exits
   if (thread.handle == NULL) {

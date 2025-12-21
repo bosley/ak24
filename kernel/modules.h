@@ -45,7 +45,7 @@ typedef struct module_instance_s {
   ak_module_vtable_t vtable;    /**< Module function pointers */
   ak_lambda_t *unload_callback; /**< User callback on unload */
   void *unload_callback_ctx;    /**< Context for unload callback */
-  AK_MUTEX *access_mutex;       /**< Per-module mutex (NULL if !thread_safe) */
+  AK24_MUTEX *access_mutex;     /**< Per-module mutex (NULL if !thread_safe) */
   _Atomic size_t ref_count;     /**< Active function call counter */
   _Atomic int state;            /**< Current module state (module_state_e) */
   bool thread_safe;             /**< Whether functions require locking */
@@ -59,7 +59,7 @@ typedef struct module_instance_s {
  */
 typedef struct {
   map_t(module_instance_t *) loaded_modules; /**< path -> instance map */
-  AK_MUTEX registry_mutex;                   /**< Protects map access */
+  AK24_MUTEX registry_mutex;                 /**< Protects map access */
   bool initialized;                          /**< Singleton init flag */
 } module_manager_t;
 

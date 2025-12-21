@@ -6,7 +6,7 @@
  * kernel-level thread primitives. This allows the thread pool implementation
  * to remain platform-agnostic.
  *
- * NOTE: This layer wraps kernel.h's AK_ threading functions.
+ * NOTE: This layer wraps kernel.h's AK24_ threading functions.
  * All platform (POSIX/Windows) and GC concerns are handled by the kernel.
  *
  * Supported platforms:
@@ -23,28 +23,28 @@
 /**
  * @brief Platform-agnostic mutex type
  *
- * Wraps kernel's AK_MUTEX which handles platform differences.
+ * Wraps kernel's AK24_MUTEX which handles platform differences.
  */
 typedef struct ak_mutex_t {
-  AK_MUTEX mutex;
+  AK24_MUTEX mutex;
 } ak_mutex_t;
 
 /**
  * @brief Platform-agnostic condition variable type
  *
- * Wraps kernel's AK_COND which handles platform differences.
+ * Wraps kernel's AK24_COND which handles platform differences.
  */
 typedef struct ak_cond_t {
-  AK_COND cond;
+  AK24_COND cond;
 } ak_cond_t;
 
 /**
  * @brief Platform-agnostic thread type
  *
- * Wraps kernel's AK_THREAD which handles platform differences.
+ * Wraps kernel's AK24_THREAD which handles platform differences.
  */
 typedef struct ak_thread_t {
-  AK_THREAD thread;
+  AK24_THREAD thread;
 } ak_thread_t;
 
 /**

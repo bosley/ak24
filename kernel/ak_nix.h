@@ -17,32 +17,32 @@
  */
 typedef struct {
   pthread_mutex_t handle;
-} AK_MUTEX;
+} AK24_MUTEX;
 
 /**
  * @brief Platform-agnostic condition variable type (POSIX implementation)
  */
 typedef struct {
   pthread_cond_t handle;
-} AK_COND;
+} AK24_COND;
 
 /**
  * @brief Platform-agnostic thread type (POSIX implementation)
  */
 typedef struct {
   pthread_t handle;
-} AK_THREAD;
+} AK24_THREAD;
 
 /**
- * @def AK_MUTEX_INITIALIZER
+ * @def AK24_MUTEX_INITIALIZER
  * @brief Static mutex initializer for POSIX
  */
-#define AK_MUTEX_INITIALIZER {PTHREAD_MUTEX_INITIALIZER}
+#define AK24_MUTEX_INITIALIZER {PTHREAD_MUTEX_INITIALIZER}
 
 /**
- * @def AK_COND_INITIALIZER
+ * @def AK24_COND_INITIALIZER
  * @brief Static condition variable initializer for POSIX
  */
-#define AK_COND_INITIALIZER {PTHREAD_COND_INITIALIZER}
+#define AK24_COND_INITIALIZER {PTHREAD_COND_INITIALIZER}
 
 #endif // AK24_AK_NIX_H

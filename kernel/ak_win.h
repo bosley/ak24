@@ -19,32 +19,32 @@
  */
 typedef struct {
   CRITICAL_SECTION handle;
-} AK_MUTEX;
+} AK24_MUTEX;
 
 /**
  * @brief Platform-agnostic condition variable type (Windows implementation)
  */
 typedef struct {
   CONDITION_VARIABLE handle;
-} AK_COND;
+} AK24_COND;
 
 /**
  * @brief Platform-agnostic thread type (Windows implementation)
  */
 typedef struct {
   HANDLE handle;
-} AK_THREAD;
+} AK24_THREAD;
 
 /**
- * @def AK_MUTEX_INITIALIZER
+ * @def AK24_MUTEX_INITIALIZER
  * @brief Static mutex initializer for Windows
  */
-#define AK_MUTEX_INITIALIZER {0}
+#define AK24_MUTEX_INITIALIZER {0}
 
 /**
- * @def AK_COND_INITIALIZER
+ * @def AK24_COND_INITIALIZER
  * @brief Static condition variable initializer for Windows
  */
-#define AK_COND_INITIALIZER {0}
+#define AK24_COND_INITIALIZER {0}
 
 #endif // AK24_AK_WIN_H

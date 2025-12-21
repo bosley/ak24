@@ -49,9 +49,9 @@ Access stats via `ak_mem_get_stats()` or `ak_mem_print_stats()`. Stats are autom
 The kernel provides platform-agnostic threading abstractions:
 
 **Thread Types:**
-- `AK_THREAD` - Platform-agnostic thread handle
-- `AK_MUTEX` - Platform-agnostic mutex
-- `AK_COND` - Platform-agnostic condition variable
+- `AK24_THREAD` - Platform-agnostic thread handle
+- `AK24_MUTEX` - Platform-agnostic mutex
+- `AK24_COND` - Platform-agnostic condition variable
 
 **Thread Operations:**
 - `AK24_THREAD_CREATE` - Create thread (GC-aware when GC enabled)
@@ -59,17 +59,17 @@ The kernel provides platform-agnostic threading abstractions:
 - `AK24_THREAD_DETACH` - Detach thread
 
 **Mutex Operations:**
-- `AK_MUTEX_INIT` - Initialize mutex
-- `AK_MUTEX_DESTROY` - Destroy mutex
-- `AK_MUTEX_LOCK` - Lock mutex
-- `AK_MUTEX_UNLOCK` - Unlock mutex
+- `AK24_MUTEX_INIT` - Initialize mutex
+- `AK24_MUTEX_DESTROY` - Destroy mutex
+- `AK24_MUTEX_LOCK` - Lock mutex
+- `AK24_MUTEX_UNLOCK` - Unlock mutex
 
 **Condition Variable Operations:**
-- `AK_COND_INIT` - Initialize condition variable
-- `AK_COND_DESTROY` - Destroy condition variable
-- `AK_COND_WAIT` - Wait on condition variable
-- `AK_COND_SIGNAL` - Signal one waiting thread
-- `AK_COND_BROADCAST` - Signal all waiting threads
+- `AK24_COND_INIT` - Initialize condition variable
+- `AK24_COND_DESTROY` - Destroy condition variable
+- `AK24_COND_WAIT` - Wait on condition variable
+- `AK24_COND_SIGNAL` - Signal one waiting thread
+- `AK24_COND_BROADCAST` - Signal all waiting threads
 
 These abstractions work on both POSIX (Linux, macOS, BSD) and Windows platforms. When GC is enabled, thread creation automatically registers threads with the garbage collector.
 
@@ -175,10 +175,10 @@ void *worker(void *arg) {
 int main(void) {
   ak_kernel_init();
 
-  AK_THREAD thread;
-  AK_THREAD_CREATE(&thread, worker, NULL);
+  AK24_THREAD thread;
+  AK24_THREAD_CREATE(&thread, worker, NULL);
 
-  AK_THREAD_JOIN(thread);
+  AK24_THREAD_JOIN(thread);
 
   ak_kernel_deinit();
   return 0;
@@ -250,11 +250,11 @@ ak_log_add_fp(file_ptr, AK24_LOG_LEVEL_INFO);  // Log to file
 For thread-safe logging, provide a lock function:
 
 ```c
-AK_MUTEX log_mutex = AK_MUTEX_INITIALIZER;
+AK24_MUTEX log_mutex = AK24_MUTEX_INITIALIZER;
 
 void log_lock(bool lock, void *udata) {
-  if (lock) AK_MUTEX_LOCK((AK_MUTEX *)udata);
-  else AK_MUTEX_UNLOCK((AK_MUTEX *)udata);
+  if (lock) AK24_MUTEX_LOCK((AK24_MUTEX *)udata);
+  else AK24_MUTEX_UNLOCK((AK24_MUTEX *)udata);
 }
 
 ak_log_set_lock(log_lock, &log_mutex);
@@ -389,9 +389,9 @@ int main(void) {
 - `ak_mem_print_stats()` - Print memory statistics (debug builds only)
 
 ### Threading
-- `AK_THREAD_CREATE(thread, fn, arg)` - Create thread
-- `AK_THREAD_JOIN(thread)` - Join thread
-- `AK_THREAD_DETACH(thread)` - Detach thread
+- `AK24_THREAD_CREATE(thread, fn, arg)` - Create thread
+- `AK24_THREAD_JOIN(thread)` - Join thread
+- `AK24_THREAD_DETACH(thread)` - Detach thread
 
 ### Signal Handling
 - `ak_register_signal_handler(signum, lambda)` - Register signal handler

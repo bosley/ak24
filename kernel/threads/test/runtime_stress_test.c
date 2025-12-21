@@ -32,14 +32,14 @@ typedef struct {
   size_t total_executed;
   size_t total_completed;
   size_t total_failed;
-  AK_MUTEX mutex;
+  AK24_MUTEX mutex;
 } shared_counter_t;
 
 typedef struct {
   int task_id;
   int expected_value;
   int *result_array;
-  AK_MUTEX *result_mutex;
+  AK24_MUTEX *result_mutex;
 } task_data_t;
 
 typedef struct {
@@ -60,7 +60,7 @@ static shared_counter_t *counter_new(void) {
   counter->total_completed = 0;
   counter->total_failed = 0;
 
-  if (AK_MUTEX_INIT(&counter->mutex) != 0) {
+  if (AK24_MUTEX_INIT(&counter->mutex) != 0) {
     AK24_FREE(counter);
     return NULL;
   }
@@ -73,25 +73,25 @@ static void counter_free(shared_counter_t *counter) {
   if (!counter) {
     return;
   }
-  AK_MUTEX_DESTROY(&counter->mutex);
+  AK24_MUTEX_DESTROY(&counter->mutex);
   AK24_FREE(counter);
 }
 
 // Helper: Increment counter safely
 static void counter_increment_executed(shared_counter_t *counter) {
-  AK_MUTEX_LOCK(&counter->mutex);
+  AK24_MUTEX_LOCK(&counter->mutex);
   counter->total_executed++;
-  AK_MUTEX_UNLOCK(&counter->mutex);
+  AK24_MUTEX_UNLOCK(&counter->mutex);
 }
 
 // Helper: Get counter values safely
 static void counter_get_values(shared_counter_t *counter, size_t *executed,
                                size_t *completed, size_t *failed) {
-  AK_MUTEX_LOCK(&counter->mutex);
+  AK24_MUTEX_LOCK(&counter->mutex);
   *executed = counter->total_executed;
   *completed = counter->total_completed;
   *failed = counter->total_failed;
-  AK_MUTEX_UNLOCK(&counter->mutex);
+  AK24_MUTEX_UNLOCK(&counter->mutex);
 }
 
 // Simple incrementing task
@@ -121,9 +121,9 @@ static void data_validation_task(void *ctx, void *args) {
     int computed = data->expected_value * 2;
 
     // Store result
-    AK_MUTEX_LOCK(data->result_mutex);
+    AK24_MUTEX_LOCK(data->result_mutex);
     data->result_array[data->task_id] = computed;
-    AK_MUTEX_UNLOCK(data->result_mutex);
+    AK24_MUTEX_UNLOCK(data->result_mutex);
   }
 }
 
@@ -146,13 +146,13 @@ static void stress_completion_callback(void *ctx, void *args) {
     return;
   }
 
-  AK_MUTEX_LOCK(&counter->mutex);
+  AK24_MUTEX_LOCK(&counter->mutex);
   if (*state == AK24_TASK_STATE_COMPLETED) {
     counter->total_completed++;
   } else if (*state == AK24_TASK_STATE_FAILED) {
     counter->total_failed++;
   }
-  AK_MUTEX_UNLOCK(&counter->mutex);
+  AK24_MUTEX_UNLOCK(&counter->mutex);
 }
 
 // Test: High volume of simple tasks
@@ -217,7 +217,7 @@ static int test_concurrent_enqueuers(void) {
   AK24_TEST_ASSERT_NOT_NULL(counter);
 
   // Create multiple enqueuer threads
-  AK_THREAD enqueuers[STRESS_CONCURRENT_ENQUEUERS];
+  AK24_THREAD enqueuers[STRESS_CONCURRENT_ENQUEUERS];
   enqueuer_args_t args[STRESS_CONCURRENT_ENQUEUERS];
 
   int tasks_per_enqueuer = STRESS_NUM_TASKS / STRESS_CONCURRENT_ENQUEUERS;
@@ -228,14 +228,13 @@ static int test_concurrent_enqueuers(void) {
     args[i].num_tasks = tasks_per_enqueuer;
     args[i].enqueuer_id = i;
 
-    int result =
-        AK24_THREAD_CREATE(&enqueuers[i], NULL, enqueuer_thread, &args[i]);
+    int result = AK24_THREAD_CREATE(&enqueuers[i], enqueuer_thread, &args[i]);
     AK24_TEST_ASSERT_EQ(result, 0);
   }
 
   // Wait for all enqueuers
   for (int i = 0; i < STRESS_CONCURRENT_ENQUEUERS; i++) {
-    AK24_THREAD_JOIN(enqueuers[i], NULL);
+    AK24_THREAD_JOIN(enqueuers[i]);
   }
 
   // Wait for all tasks to complete
@@ -264,8 +263,8 @@ static int test_data_validation_stress(void) {
   int *results = AK24_ALLOC(sizeof(int) * num_tasks);
   AK24_TEST_ASSERT_NOT_NULL(results);
 
-  AK_MUTEX result_mutex;
-  AK_MUTEX_INIT(&result_mutex);
+  AK24_MUTEX result_mutex;
+  AK24_MUTEX_INIT(&result_mutex);
 
   // Initialize results to sentinel value
   for (int i = 0; i < num_tasks; i++) {
@@ -295,7 +294,7 @@ static int test_data_validation_stress(void) {
     AK24_TEST_ASSERT_EQ(results[i], expected);
   }
 
-  AK_MUTEX_DESTROY(&result_mutex);
+  AK24_MUTEX_DESTROY(&result_mutex);
   AK24_FREE(results);
   ak_thread_pool_free(pool);
 
@@ -568,7 +567,7 @@ static int test_state_transitions_stress(void) {
 typedef struct {
   int n;
   int *result;
-  AK_MUTEX *mutex;
+  AK24_MUTEX *mutex;
 } fib_task_t;
 
 static int compute_fibonacci(int n) {
@@ -589,9 +588,9 @@ static void fibonacci_task(void *ctx, void *args) {
 
   if (task && task->result && task->mutex) {
     int computed = compute_fibonacci(task->n);
-    AK_MUTEX_LOCK(task->mutex);
+    AK24_MUTEX_LOCK(task->mutex);
     task->result[task->n] = computed;
-    AK_MUTEX_UNLOCK(task->mutex);
+    AK24_MUTEX_UNLOCK(task->mutex);
   }
 }
 
@@ -607,8 +606,8 @@ static int test_fibonacci_computation_stress(void) {
   int *results = AK24_ALLOC(sizeof(int) * (max_fib + 1));
   AK24_TEST_ASSERT_NOT_NULL(results);
 
-  AK_MUTEX mutex;
-  AK_MUTEX_INIT(&mutex);
+  AK24_MUTEX mutex;
+  AK24_MUTEX_INIT(&mutex);
 
   // Initialize results
   for (int i = 0; i <= max_fib; i++) {
@@ -640,7 +639,7 @@ static int test_fibonacci_computation_stress(void) {
     AK24_TEST_ASSERT_EQ(results[i], expected_fibs[i]);
   }
 
-  AK_MUTEX_DESTROY(&mutex);
+  AK24_MUTEX_DESTROY(&mutex);
   AK24_FREE(results);
   ak_thread_pool_free(pool);
 
@@ -652,7 +651,7 @@ typedef struct {
   int start;
   int end;
   int *prime_count;
-  AK_MUTEX *mutex;
+  AK24_MUTEX *mutex;
 } prime_task_t;
 
 static int is_prime(int n) {
@@ -681,9 +680,9 @@ static void prime_counting_task(void *ctx, void *args) {
       }
     }
 
-    AK_MUTEX_LOCK(task->mutex);
+    AK24_MUTEX_LOCK(task->mutex);
     *task->prime_count += count;
-    AK_MUTEX_UNLOCK(task->mutex);
+    AK24_MUTEX_UNLOCK(task->mutex);
   }
 }
 
@@ -693,8 +692,8 @@ static int test_prime_counting_stress(void) {
   AK24_TEST_ASSERT_NOT_NULL(pool);
 
   int total_primes = 0;
-  AK_MUTEX mutex;
-  AK_MUTEX_INIT(&mutex);
+  AK24_MUTEX mutex;
+  AK24_MUTEX_INIT(&mutex);
 
   const int max_number = 10000;
   const int chunk_size = 100;
@@ -717,7 +716,7 @@ static int test_prime_counting_stress(void) {
   // There are 1229 primes less than 10000
   AK24_TEST_ASSERT_EQ(total_primes, 1229);
 
-  AK_MUTEX_DESTROY(&mutex);
+  AK24_MUTEX_DESTROY(&mutex);
   ak_thread_pool_free(pool);
 
   AK24_TEST_PASS();
@@ -728,7 +727,7 @@ typedef struct {
   unsigned char *data;
   size_t length;
   unsigned int *checksum;
-  AK_MUTEX *mutex;
+  AK24_MUTEX *mutex;
 } checksum_task_t;
 
 static unsigned int compute_checksum(unsigned char *data, size_t length) {
@@ -756,9 +755,9 @@ static void checksum_task(void *ctx, void *args) {
   if (task && task->data && task->checksum && task->mutex) {
     unsigned int sum = compute_checksum(task->data, task->length);
 
-    AK_MUTEX_LOCK(task->mutex);
+    AK24_MUTEX_LOCK(task->mutex);
     *task->checksum ^= sum; // XOR checksums together
-    AK_MUTEX_UNLOCK(task->mutex);
+    AK24_MUTEX_UNLOCK(task->mutex);
   }
 }
 
@@ -769,8 +768,8 @@ static int test_checksum_validation_stress(void) {
 
   unsigned int computed_checksum = 0;
   unsigned int expected_checksum = 0;
-  AK_MUTEX mutex;
-  AK_MUTEX_INIT(&mutex);
+  AK24_MUTEX mutex;
+  AK24_MUTEX_INIT(&mutex);
 
   const int num_blocks = STRESS_CHECKSUM_TASKS;
   const size_t block_size = 256;
@@ -804,7 +803,7 @@ static int test_checksum_validation_stress(void) {
   // Validate checksum matches
   AK24_TEST_ASSERT_EQ(computed_checksum, expected_checksum);
 
-  AK_MUTEX_DESTROY(&mutex);
+  AK24_MUTEX_DESTROY(&mutex);
   ak_thread_pool_free(pool);
 
   AK24_TEST_PASS();
@@ -817,7 +816,7 @@ typedef struct {
   int *matrix_b;
   int *result;
   int size;
-  AK_MUTEX *mutex;
+  AK24_MUTEX *mutex;
 } matrix_task_t;
 
 static void matrix_row_multiply(void *ctx, void *args) {
@@ -834,9 +833,9 @@ static void matrix_row_multiply(void *ctx, void *args) {
         sum += task->matrix_a[row * size + k] * task->matrix_b[k * size + col];
       }
 
-      AK_MUTEX_LOCK(task->mutex);
+      AK24_MUTEX_LOCK(task->mutex);
       task->result[row * size + col] = sum;
-      AK_MUTEX_UNLOCK(task->mutex);
+      AK24_MUTEX_UNLOCK(task->mutex);
     }
   }
 }
@@ -852,8 +851,8 @@ static int test_matrix_multiplication_stress(void) {
   int *result = AK24_ALLOC(sizeof(int) * size * size);
   int *expected = AK24_ALLOC(sizeof(int) * size * size);
 
-  AK_MUTEX mutex;
-  AK_MUTEX_INIT(&mutex);
+  AK24_MUTEX mutex;
+  AK24_MUTEX_INIT(&mutex);
 
   // Initialize matrices with simple values
   for (int i = 0; i < size * size; i++) {
@@ -895,7 +894,7 @@ static int test_matrix_multiplication_stress(void) {
     AK24_TEST_ASSERT_EQ(result[i], expected[i]);
   }
 
-  AK_MUTEX_DESTROY(&mutex);
+  AK24_MUTEX_DESTROY(&mutex);
   AK24_FREE(matrix_a);
   AK24_FREE(matrix_b);
   AK24_FREE(result);
@@ -911,7 +910,7 @@ typedef struct {
   int length;
   int *sorted_array;
   int task_id;
-  AK_MUTEX *mutex;
+  AK24_MUTEX *mutex;
 } sort_task_t;
 
 static void bubble_sort(int *arr, int n) {
@@ -951,11 +950,11 @@ static void sorting_task(void *ctx, void *args) {
     bubble_sort(local_copy, task->length);
 
     // Store sorted result
-    AK_MUTEX_LOCK(task->mutex);
+    AK24_MUTEX_LOCK(task->mutex);
     for (int i = 0; i < task->length; i++) {
       task->sorted_array[task->task_id * task->length + i] = local_copy[i];
     }
-    AK_MUTEX_UNLOCK(task->mutex);
+    AK24_MUTEX_UNLOCK(task->mutex);
 
     AK24_FREE(local_copy);
   }
@@ -970,8 +969,8 @@ static int test_array_sorting_stress(void) {
   const int array_length = 50;
 
   int *sorted_results = AK24_ALLOC(sizeof(int) * num_arrays * array_length);
-  AK_MUTEX mutex;
-  AK_MUTEX_INIT(&mutex);
+  AK24_MUTEX mutex;
+  AK24_MUTEX_INIT(&mutex);
 
   for (int i = 0; i < num_arrays; i++) {
     int *array = AK24_ALLOC(sizeof(int) * array_length);
@@ -1004,7 +1003,7 @@ static int test_array_sorting_stress(void) {
     }
   }
 
-  AK_MUTEX_DESTROY(&mutex);
+  AK24_MUTEX_DESTROY(&mutex);
   AK24_FREE(sorted_results);
   ak_thread_pool_free(pool);
 

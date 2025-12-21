@@ -237,8 +237,8 @@ static int test_arbuff_concurrent_access(void) {
     *all_values[i] = i;
   }
 
-  AK_THREAD producers[NUM_PRODUCERS];
-  AK_THREAD consumers[NUM_CONSUMERS];
+  AK24_THREAD producers[NUM_PRODUCERS];
+  AK24_THREAD consumers[NUM_CONSUMERS];
   thread_data_t producer_data[NUM_PRODUCERS];
   thread_data_t consumer_data[NUM_CONSUMERS];
 
@@ -247,7 +247,7 @@ static int test_arbuff_concurrent_access(void) {
     producer_data[i].thread_id = i;
     producer_data[i].iterations = ITERATIONS;
     producer_data[i].values = &all_values[i * ITERATIONS];
-    AK24_THREAD_CREATE(&producers[i], NULL, producer_thread, &producer_data[i]);
+    AK24_THREAD_CREATE(&producers[i], producer_thread, &producer_data[i]);
   }
 
   for (int i = 0; i < NUM_CONSUMERS; i++) {
@@ -255,15 +255,15 @@ static int test_arbuff_concurrent_access(void) {
     consumer_data[i].thread_id = i;
     consumer_data[i].iterations = ITERATIONS;
     consumer_data[i].values = NULL;
-    AK24_THREAD_CREATE(&consumers[i], NULL, consumer_thread, &consumer_data[i]);
+    AK24_THREAD_CREATE(&consumers[i], consumer_thread, &consumer_data[i]);
   }
 
   for (int i = 0; i < NUM_PRODUCERS; i++) {
-    AK24_THREAD_JOIN(producers[i], NULL);
+    AK24_THREAD_JOIN(producers[i]);
   }
 
   for (int i = 0; i < NUM_CONSUMERS; i++) {
-    AK24_THREAD_JOIN(consumers[i], NULL);
+    AK24_THREAD_JOIN(consumers[i]);
   }
 
   AK24_TEST_ASSERT_EQ(ak_arbuff_is_empty(arbuff), 1);

@@ -32,6 +32,7 @@ print_usage() {
     echo "  uninstall  Remove AK24 installation completely"
     echo "  status     Check if AK24 is installed and show version info"
     echo "  test       Run full test suite (compile-time + integration tests)"
+    echo "  ci         Run complete CI test suite (GC + ASAN + Manual modes)"
     echo ""
     echo "Environment:"
     echo "  AK24_HOME        Installation directory (default: ~/.ak24)"
@@ -499,16 +500,16 @@ cmd_test() {
             echo "Compile-time tests: ✓ Passed"
             echo "Integration tests:  ✓ Passed"
             echo ""
-            exit 0
+            return 0
         else
             echo "========================================="
             echo -e "${RED}✗ Integration tests failed${NC}"
             echo "========================================="
-            exit 1
+            return 1
         fi
     else
         echo -e "${YELLOW}⚠ Integration test runner not found: tests/run.sh${NC}"
-        exit 1
+        return 1
     fi
 }
 
@@ -578,6 +579,161 @@ cmd_uninstall() {
     fi
 }
 
+cmd_ci() {
+    echo "========================================="
+    echo "AK24 Continuous Integration Test Suite"
+    echo "========================================="
+    echo ""
+    echo "This will run the complete test suite across all configurations:"
+    echo "  1. GC mode (production)"
+    echo "  2. ASAN mode (memory debugging)"
+    echo "  3. Manual mode (no GC, no ASAN)"
+    echo ""
+
+    # Store original build mode to restore later
+    ORIGINAL_BUILD_MODE="${AK24_BUILD_MODE}"
+
+    # Configuration 1: GC Mode
+    echo "========================================="
+    echo "Configuration 1/3: GC Mode"
+    echo "========================================="
+    echo ""
+    export AK24_BUILD_MODE=gc
+
+    if ! cmd_test; then
+        echo ""
+        echo "========================================="
+        echo -e "${RED}✗ CI FAILED: GC mode tests failed${NC}"
+        echo "========================================="
+        exit 1
+    fi
+
+    echo ""
+    echo -e "${GREEN}✓ GC mode tests passed${NC}"
+    echo ""
+
+    # Configuration 2: ASAN Mode
+    echo "========================================="
+    echo "Configuration 2/3: ASAN Mode"
+    echo "========================================="
+    echo ""
+    export AK24_BUILD_MODE=asan
+
+    if ! cmd_test; then
+        echo ""
+        echo "========================================="
+        echo -e "${RED}✗ CI FAILED: ASAN mode tests failed${NC}"
+        echo "========================================="
+        exit 1
+    fi
+
+    echo ""
+    echo -e "${GREEN}✓ ASAN mode tests passed${NC}"
+    echo ""
+
+    # Configuration 3: Manual Mode (No GC, No ASAN)
+    echo "========================================="
+    echo "Configuration 3/3: Manual Mode (No GC, No ASAN)"
+    echo "========================================="
+    echo ""
+
+    cd "${SCRIPT_DIR}"
+
+    # Clean previous build
+    echo -e "${BLUE}Cleaning previous builds...${NC}"
+    make clean
+    echo ""
+
+    # Configure with no GC and no ASAN
+    echo -e "${BLUE}Configuring CMake (GC=OFF, ASAN=OFF)...${NC}"
+    mkdir -p "${SCRIPT_DIR}/build"
+    cd "${SCRIPT_DIR}/build"
+    cmake -DCMAKE_INSTALL_PREFIX="${AK24_HOME}" \
+          -DAK24_GC_ENABLED=OFF \
+          -DAK24_BUILD_ASAN=OFF \
+          ..
+    echo ""
+
+    # Build and install
+    echo -e "${BLUE}Building and installing AK24...${NC}"
+    cd "${SCRIPT_DIR}"
+
+    if [[ "${AK24_HOME}" == "${HOME}/.ak24" ]] || [[ "${AK24_HOME}" == ${HOME}/* ]]; then
+        make install
+    else
+        if [[ $EUID -ne 0 ]]; then
+            sudo make install
+        else
+            make install
+        fi
+    fi
+
+    # Verify installation
+    if ! check_installed; then
+        echo -e "${RED}✗ Installation failed${NC}"
+        exit 1
+    fi
+    echo ""
+
+    # Run compile-time tests
+    echo -e "${BLUE}Running compile-time tests...${NC}"
+    make test
+    echo ""
+    echo -e "${GREEN}✓ Compile-time tests passed${NC}"
+    echo ""
+
+    # Run integration tests
+    echo -e "${BLUE}Running integration tests...${NC}"
+    cd "${SCRIPT_DIR}/tests"
+
+    if [[ ! -f "run.sh" ]]; then
+        echo -e "${RED}✗ Integration test runner not found: tests/run.sh${NC}"
+        exit 1
+    fi
+
+    if ! bash run.sh; then
+        echo ""
+        echo "========================================="
+        echo -e "${RED}✗ CI FAILED: Manual mode tests failed${NC}"
+        echo "========================================="
+        exit 1
+    fi
+
+    echo ""
+    echo -e "${GREEN}✓ Manual mode tests passed${NC}"
+    echo ""
+
+    # Clean up: uninstall
+    cd "${SCRIPT_DIR}"
+    echo "========================================="
+    echo "Cleaning up: Uninstalling AK24"
+    echo "========================================="
+    echo ""
+
+    if [[ -w "${AK24_HOME}" ]] || [[ ! -e "${AK24_HOME}" ]]; then
+        rm -rf "${AK24_HOME}"
+    else
+        sudo rm -rf "${AK24_HOME}"
+    fi
+
+    # Final report
+    echo ""
+    echo "========================================="
+    echo -e "${GREEN}✓ CI PASSED: All configurations successful!${NC}"
+    echo "========================================="
+    echo ""
+    echo "Test results:"
+    echo "  ✓ GC mode (production):           PASSED"
+    echo "  ✓ ASAN mode (memory debugging):   PASSED"
+    echo "  ✓ Manual mode (no GC, no ASAN):   PASSED"
+    echo ""
+    echo "All tests completed successfully across all build configurations."
+    echo ""
+
+    # Restore original build mode
+    export AK24_BUILD_MODE="${ORIGINAL_BUILD_MODE}"
+}
+
 # Main command dispatcher
 if [[ $# -eq 0 ]]; then
     print_usage
@@ -601,6 +757,10 @@ case "${COMMAND}" in
         ;;
     test)
         cmd_test
+        exit $?
+        ;;
+    ci)
+        cmd_ci
         ;;
     help|-h|--help)
         print_usage

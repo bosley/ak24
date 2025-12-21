@@ -107,9 +107,13 @@ endif()
 
 add_subdirectory(kernel)
 
+# Optional systems that build on top of kernel
+add_subdirectory(systems)
+
 add_subdirectory(examples/ak24-cli)
 add_subdirectory(examples/arena-demo)
 add_subdirectory(examples/atom-cube-demo)
+add_subdirectory(examples/atom-viewer-demo)
 add_subdirectory(examples/thread-pool-demo)
 add_subdirectory(examples/signals-example)
 add_subdirectory(examples/sourceloc-demo)

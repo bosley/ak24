@@ -41,6 +41,7 @@ file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/arena/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/src/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/filepath/src/*.c
 )
 
 # Add base kernel sources (non-platform/GC specific)
@@ -90,6 +91,7 @@ file(GLOB_RECURSE KERNEL_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/arena/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/filepath/test/*.c
 )
 
 file(GLOB_RECURSE KERNEL_HEADERS
@@ -109,6 +111,7 @@ file(GLOB_RECURSE KERNEL_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/arena/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/include/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include/*.h
 )
 
 if(AK24_BUILD_SHARED_KERNEL)
@@ -139,6 +142,7 @@ target_include_directories(ak24_kernel PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/arena/include
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/include
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include
     ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include
 )
 
@@ -187,6 +191,7 @@ file(GLOB_RECURSE ALL_COMPILE_TIME_TESTS
     ${CMAKE_CURRENT_SOURCE_DIR}/arena/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/filepath/test/*.c
 )
 
 file(GLOB BUFFER_TEST_SOURCES

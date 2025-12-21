@@ -27,6 +27,7 @@
 #include "atom.h"
 #include "buffer.h"
 #include "context.h"
+#include "filepath.h"
 #include "forms.h"
 #include "forms_primitives.h"
 #include "interfaces.h"
@@ -53,9 +54,28 @@
 #define AK24_PLATFORM_WINDOWS
 #endif
 #include "ak_win.h"
-#elif defined(__unix__) || defined(__APPLE__) || defined(__linux__)
+#elif defined(__APPLE__)
 #ifndef AK24_PLATFORM_POSIX
 #define AK24_PLATFORM_POSIX
+#endif
+#ifndef AK24_PLATFORM_APPLE
+#define AK24_PLATFORM_APPLE
+#endif
+#include "ak_nix.h"
+#elif defined(__linux__)
+#ifndef AK24_PLATFORM_POSIX
+#define AK24_PLATFORM_POSIX
+#endif
+#ifndef AK24_PLATFORM_LINUX
+#define AK24_PLATFORM_LINUX
+#endif
+#include "ak_nix.h"
+#elif defined(__unix__)
+#ifndef AK24_PLATFORM_POSIX
+#define AK24_PLATFORM_POSIX
+#endif
+#ifndef AK24_PLATFORM_UNIX
+#define AK24_PLATFORM_UNIX
 #endif
 #include "ak_nix.h"
 #else

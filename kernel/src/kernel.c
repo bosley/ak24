@@ -33,6 +33,7 @@ void ak_kernel_init(void) {
   GC_INIT();
   ak_intern_init();
   ak_sourceloc_init();
+  ak_filepath_init();
   list_init(&shutdown_lambdas);
   shutdown_lambdas_initialized = 1;
   ak_signal_handlers_init();
@@ -58,6 +59,7 @@ void ak_kernel_deinit(void) {
     shutdown_lambdas_initialized = 0;
   }
   ak_signal_handlers_deinit();
+  ak_filepath_shutdown();
   ak_sourceloc_shutdown();
   ak_intern_shutdown();
   sched_yield();
@@ -76,6 +78,7 @@ void ak_kernel_init(void) {
 #endif
   ak_intern_init();
   ak_sourceloc_init();
+  ak_filepath_init();
   list_init(&shutdown_lambdas);
   shutdown_lambdas_initialized = 1;
   ak_signal_handlers_init();
@@ -101,6 +104,7 @@ void ak_kernel_deinit(void) {
     shutdown_lambdas_initialized = 0;
   }
   ak_signal_handlers_deinit();
+  ak_filepath_shutdown();
   ak_sourceloc_shutdown();
   ak_intern_shutdown();
 }

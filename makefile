@@ -15,7 +15,18 @@ build: configure
 	@cmake --build $(BUILD_DIR) -j$(JOBS)
 
 test: build
-	@$(BUILD_DIR)/bin/ak24_tests
+	@echo "Running all tests..."
+	@for test in $(BUILD_DIR)/test/compile_time/ak24_*; do \
+		if [ -f "$$test" ]; then \
+			echo ""; \
+			echo "=== Running $$(basename $$test) ==="; \
+			"$$test" || exit 1; \
+		fi; \
+	done
+	@echo ""
+	@echo "==================================="
+	@echo "All tests passed!"
+	@echo "==================================="
 
 docs:
 	@echo "Generating API documentation with Doxygen..."

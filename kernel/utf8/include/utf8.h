@@ -125,27 +125,37 @@ size_t ak_utf8_char_count(const uint8_t *data, size_t byte_len);
 bool ak_utf8_is_whitespace(ak_utf8_codepoint_t codepoint);
 
 /**
- * @brief Check if codepoint is ASCII digit
+ * @brief Check if codepoint is a digit
  *
- * Returns true for ASCII digits 0-9 only. Does not recognize
- * Unicode digit variants from other scripts.
+ * Returns true for digits from any Unicode script including:
+ * - ASCII digits (0-9)
+ * - Arabic-Indic digits (٠-٩)
+ * - Devanagari digits (०-९)
+ * - Bengali, Thai, Khmer, and many other numeric scripts
  *
  * @param codepoint Unicode codepoint
- * @return True if ASCII digit (0x30-0x39), false otherwise
+ * @return True if digit from any script, false otherwise
  *
  * @notthreadsafe
- *
- * @note For simplicity, only ASCII digits are supported for parsing
  */
 bool ak_utf8_is_digit(ak_utf8_codepoint_t codepoint);
 
 /**
- * @brief Check if codepoint is ASCII alphabetic
+ * @brief Check if codepoint is a letter
  *
- * Returns true for ASCII letters A-Z and a-z only.
+ * Returns true for letters from any Unicode script including:
+ * - ASCII letters (A-Z, a-z)
+ * - Latin Extended (À-ÿ, etc.)
+ * - Greek and Coptic (Α-ω)
+ * - Cyrillic (А-я)
+ * - Arabic, Hebrew, Devanagari
+ * - CJK Unified Ideographs (一, 中, etc.)
+ * - Hiragana (あ-ん), Katakana (ア-ン)
+ * - Hangul (가-힣)
+ * - And many other scripts
  *
  * @param codepoint Unicode codepoint
- * @return True if ASCII letter, false otherwise
+ * @return True if letter from any script, false otherwise
  *
  * @notthreadsafe
  */
@@ -214,5 +224,48 @@ size_t ak_utf8_prev_char(const uint8_t *data, size_t current_pos);
  * @notthreadsafe
  */
 bool ak_utf8_validate(const uint8_t *data, size_t byte_len);
+
+/**
+ * @brief Check if codepoint is a combining character
+ *
+ * Returns true for Unicode combining marks that modify the previous
+ * base character (accents, diacritics, etc.).
+ *
+ * @param codepoint Unicode codepoint
+ * @return True if combining character, false otherwise
+ *
+ * @notthreadsafe
+ */
+bool ak_utf8_is_combining_mark(ak_utf8_codepoint_t codepoint);
+
+/**
+ * @brief Count grapheme clusters in UTF-8 text
+ *
+ * Counts grapheme clusters (user-perceived characters) rather than
+ * codepoints. For example, "é" composed of 'e' + combining accent
+ * counts as 1 grapheme cluster, not 2 codepoints.
+ *
+ * @param data Pointer to byte sequence
+ * @param byte_len Length in bytes
+ * @return Number of grapheme clusters
+ *
+ * @notthreadsafe
+ */
+size_t ak_utf8_grapheme_count(const uint8_t *data, size_t byte_len);
+
+/**
+ * @brief Get byte length of next grapheme cluster
+ *
+ * Returns the number of bytes in the next grapheme cluster starting
+ * at the given position. A grapheme cluster may consist of a base
+ * character followed by zero or more combining marks.
+ *
+ * @param data Pointer to byte sequence
+ * @param max_bytes Maximum bytes available to read
+ * @return Number of bytes in grapheme cluster
+ *
+ * @notthreadsafe
+ */
+size_t ak_utf8_grapheme_len(const uint8_t *data, size_t max_bytes);
 
 #endif // AK24_UTF8_H

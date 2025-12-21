@@ -24,7 +24,7 @@ static void module_free(void *ptr);
 
 // Singleton module manager instance
 static module_manager_t *g_module_manager = NULL;
-static pthread_mutex_t g_manager_init_mutex = PTHREAD_MUTEX_INITIALIZER;
+static AK24_MUTEX g_manager_init_mutex = AK24_MUTEX_INITIALIZER;
 
 // Global allocator provided to modules
 static ak_module_allocator_t g_module_allocator = {
@@ -141,22 +141,22 @@ static void track_module_resources(module_instance_t *instance) {
  * @brief Get or create the singleton module manager
  */
 static module_manager_t *get_or_create_manager(void) {
-  pthread_mutex_lock(&g_manager_init_mutex);
+  AK24_MUTEX_LOCK(&g_manager_init_mutex);
 
   if (!g_module_manager) {
     g_module_manager = (module_manager_t *)AK24_ALLOC(sizeof(module_manager_t));
     if (!g_module_manager) {
-      pthread_mutex_unlock(&g_manager_init_mutex);
+      AK24_MUTEX_UNLOCK(&g_manager_init_mutex);
       return NULL;
     }
 
     map_init_generic(&g_module_manager->loaded_modules, sizeof(char *),
                      map_hash_str, map_cmp_str);
-    pthread_mutex_init(&g_module_manager->registry_mutex, NULL);
+    AK24_MUTEX_INIT(&g_module_manager->registry_mutex);
     g_module_manager->initialized = true;
   }
 
-  pthread_mutex_unlock(&g_manager_init_mutex);
+  AK24_MUTEX_UNLOCK(&g_manager_init_mutex);
   return g_module_manager;
 }
 
@@ -168,7 +168,7 @@ __attribute__((unused)) static void destroy_manager(module_manager_t *mgr) {
     return;
   }
 
-  pthread_mutex_lock(&mgr->registry_mutex);
+  AK24_MUTEX_LOCK(&mgr->registry_mutex);
 
   // Unload all modules
   map_iter_t iter = map_iter(&mgr->loaded_modules);
@@ -182,8 +182,8 @@ __attribute__((unused)) static void destroy_manager(module_manager_t *mgr) {
   }
 
   map_deinit(&mgr->loaded_modules);
-  pthread_mutex_unlock(&mgr->registry_mutex);
-  pthread_mutex_destroy(&mgr->registry_mutex);
+  AK24_MUTEX_UNLOCK(&mgr->registry_mutex);
+  AK24_MUTEX_DESTROY(&mgr->registry_mutex);
 
   AK24_FREE(mgr);
 }
@@ -313,7 +313,7 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
     if (error)
       *error = "Function pointer validation failed";
     if (instance->access_mutex) {
-      pthread_mutex_destroy(instance->access_mutex);
+      AK24_MUTEX_DESTROY(instance->access_mutex);
       AK24_FREE(instance->access_mutex);
     }
     AK24_FREE(instance->path);
@@ -329,8 +329,7 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
     in the lambdas we create for the user later on down the line
   */
   if (options->thread_safe) {
-    instance->access_mutex =
-        (pthread_mutex_t *)AK24_ALLOC(sizeof(pthread_mutex_t));
+    instance->access_mutex = (AK24_MUTEX *)AK24_ALLOC(sizeof(AK24_MUTEX));
     if (!instance->access_mutex) {
       atomic_store_explicit((_Atomic int *)&instance->state,
                             MODULE_STATE_FAILED, memory_order_release);
@@ -341,7 +340,7 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
         *error = "Failed to allocate mutex";
       return NULL;
     }
-    pthread_mutex_init(instance->access_mutex, NULL);
+    AK24_MUTEX_INIT(instance->access_mutex);
   } else {
     instance->access_mutex = NULL;
   }
@@ -357,7 +356,7 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
     if (error)
       *error = init_error ? init_error : "Module init failed";
     if (instance->access_mutex) {
-      pthread_mutex_destroy(instance->access_mutex);
+      AK24_MUTEX_DESTROY(instance->access_mutex);
       AK24_FREE(instance->access_mutex);
     }
     AK24_FREE(instance->path);
@@ -379,7 +378,7 @@ create_module_instance(ak_module_load_options_t *options, const char **error) {
       deinit_fn(module_ctx);
     }
     if (instance->access_mutex) {
-      pthread_mutex_destroy(instance->access_mutex);
+      AK24_MUTEX_DESTROY(instance->access_mutex);
       AK24_FREE(instance->access_mutex);
     }
     AK24_FREE(instance->path);
@@ -432,7 +431,7 @@ static void destroy_module_instance(module_instance_t *instance) {
 
   // Destroy mutex if present
   if (instance->access_mutex) {
-    pthread_mutex_destroy(instance->access_mutex);
+    AK24_MUTEX_DESTROY(instance->access_mutex);
     AK24_FREE(instance->access_mutex);
   }
 
@@ -456,13 +455,13 @@ static ak_module_handle_t *load_module_impl(ak_module_load_options_t *options,
     return NULL;
   }
 
-  pthread_mutex_lock(&mgr->registry_mutex);
+  AK24_MUTEX_LOCK(&mgr->registry_mutex);
 
   // Check if module already loaded
   module_instance_t **existing = (module_instance_t **)map_get_generic(
       &mgr->loaded_modules, &options->module_path);
   if (existing && *existing) {
-    pthread_mutex_unlock(&mgr->registry_mutex);
+    AK24_MUTEX_UNLOCK(&mgr->registry_mutex);
     if (error)
       *error = "Module already loaded";
     return NULL;
@@ -471,22 +470,22 @@ static ak_module_handle_t *load_module_impl(ak_module_load_options_t *options,
   // Create module instance
   module_instance_t *instance = create_module_instance(options, error);
   if (!instance) {
-    pthread_mutex_unlock(&mgr->registry_mutex);
+    AK24_MUTEX_UNLOCK(&mgr->registry_mutex);
     return NULL;
   }
 
   // Add to registry
   map_set_generic(&mgr->loaded_modules, &options->module_path, instance);
 
-  pthread_mutex_unlock(&mgr->registry_mutex);
+  AK24_MUTEX_UNLOCK(&mgr->registry_mutex);
 
   // Create user-facing handle
   ak_module_handle_t *handle =
       (ak_module_handle_t *)AK24_ALLOC(sizeof(ak_module_handle_t));
   if (!handle) {
-    pthread_mutex_lock(&mgr->registry_mutex);
+    AK24_MUTEX_LOCK(&mgr->registry_mutex);
     map_remove_generic(&mgr->loaded_modules, &options->module_path);
-    pthread_mutex_unlock(&mgr->registry_mutex);
+    AK24_MUTEX_UNLOCK(&mgr->registry_mutex);
     destroy_module_instance(instance);
     if (error)
       *error = "Failed to allocate module handle";
@@ -522,7 +521,7 @@ static bool unload_module_impl(ak_module_handle_t *handle, const char **error) {
     return false;
   }
 
-  pthread_mutex_lock(&mgr->registry_mutex);
+  AK24_MUTEX_LOCK(&mgr->registry_mutex);
 
   // Find the module instance by dl_handle
   module_instance_t *found_instance = NULL;
@@ -542,7 +541,7 @@ static bool unload_module_impl(ak_module_handle_t *handle, const char **error) {
   }
 
   if (!found_instance || !found_path) {
-    pthread_mutex_unlock(&mgr->registry_mutex);
+    AK24_MUTEX_UNLOCK(&mgr->registry_mutex);
     if (error)
       *error = "Module not found in registry";
     return false;
@@ -552,7 +551,7 @@ static bool unload_module_impl(ak_module_handle_t *handle, const char **error) {
   int current_state = atomic_load_explicit(
       (_Atomic int *)&found_instance->state, memory_order_acquire);
   if (current_state != MODULE_STATE_LOADED) {
-    pthread_mutex_unlock(&mgr->registry_mutex);
+    AK24_MUTEX_UNLOCK(&mgr->registry_mutex);
     if (error) {
       if (current_state == MODULE_STATE_UNLOADING) {
         *error = "Module is already being unloaded";
@@ -568,7 +567,7 @@ static bool unload_module_impl(ak_module_handle_t *handle, const char **error) {
   // Check if module is still in use
   if (atomic_load_explicit(&found_instance->ref_count, memory_order_acquire) >
       0) {
-    pthread_mutex_unlock(&mgr->registry_mutex);
+    AK24_MUTEX_UNLOCK(&mgr->registry_mutex);
     if (error)
       *error = "Module still in use";
     return false;
@@ -577,7 +576,7 @@ static bool unload_module_impl(ak_module_handle_t *handle, const char **error) {
   // Remove from registry
   map_remove_generic(&mgr->loaded_modules, &found_path);
 
-  pthread_mutex_unlock(&mgr->registry_mutex);
+  AK24_MUTEX_UNLOCK(&mgr->registry_mutex);
 
   // Destroy instance
   destroy_module_instance(found_instance);

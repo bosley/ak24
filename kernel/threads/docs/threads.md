@@ -2,20 +2,6 @@
 
 The threads module provides a thread pool system for managing concurrent execution of lambda-based tasks. It supports configurable worker threads, task queuing, completion callbacks, and safe lifecycle management with strict state validation.
 
-## Platform Support
-
-When I initially made the thread pool the focus was nix only. I figure with large langauage models helping (as they are now as a refactor
-and documentation boyo) I would try generating the windows stuff and testing it (seeing as i have no intention of targeting windows atm)
-but I just can't permit auto generated untested never-actually-used code to linger in my library here, so the windows stuff will remain
-stubbed until I or someone can do the work of testing/validating it.
-
-The thread pool is **cross-platform ready** with clean separation:
-
-- ✅ **POSIX** (Linux, macOS, BSD) - **Fully implemented and tested**
-- 🔧 **Windows** - **Structure prepared, implementation pending**
-
-Platform-specific code is isolated in `src/nix/` and `src/win/` subdirectories, with a clean abstraction layer that allows the core thread pool implementation to remain platform-agnostic.
-
 ## Core Concept
 
 A thread pool is a concurrent execution environment that:
@@ -170,7 +156,7 @@ ak_thread_pool_enqueue(pool, task, NULL);
 ```c
 typedef struct {
     int total;
-    pthread_mutex_t mutex;
+    AK24_MUTEX mutex;
 } counter_t;
 
 void task_with_counter(void *ctx, void *args) {
@@ -183,15 +169,15 @@ void on_task_done(void *ctx, void *args) {
     ak_task_state_t *state = (ak_task_state_t *)args;
 
     if (*state == AK24_TASK_STATE_COMPLETED) {
-        pthread_mutex_lock(&counter->mutex);
+        AK24_MUTEX_LOCK(&counter->mutex);
         counter->total++;
-        pthread_mutex_unlock(&counter->mutex);
+        AK24_MUTEX_UNLOCK(&counter->mutex);
     }
 }
 
 counter_t *counter = AK24_ALLOC(sizeof(counter_t));
 counter->total = 0;
-pthread_mutex_init(&counter->mutex, NULL);
+AK24_MUTEX_INIT(&counter->mutex);
 
 for (int i = 0; i < 10; i++) {
     ak_lambda_t *task = ak_lambda_new(task_with_counter, counter, NULL);
@@ -264,62 +250,3 @@ This will:
 5. Free the pool
 
 **Important**: Do not use the pool after calling `ak_thread_pool_free()`.
-
-## Platform Abstraction Layer
-
-The thread pool uses a clean abstraction for platform-specific primitives:
-
-**Abstracted Types** (defined in [thread_platform.h](../include/thread_platform.h)):
-- `ak_mutex_t` - Mutex for mutual exclusion
-- `ak_cond_t` - Condition variable for signaling
-- `ak_thread_t` - Thread handle
-
-**Abstracted Operations**:
-- `ak_mutex_init/destroy/lock/unlock` - Mutex operations
-- `ak_cond_init/destroy/wait/signal/broadcast` - Condition variable operations
-- `ak_thread_create/join` - Thread lifecycle
-
-**Implementation Structure**:
-```
-kernel/threads/src/
-├── threads.c              # Platform-agnostic core implementation
-├── nix/
-│   └── thread_platform.c  # POSIX implementation (pthread)
-└── win/
-    └── thread_platform.c  # Windows implementation (WinAPI)
-```
-
-The CMake build system automatically selects the appropriate platform implementation based on the target operating system.
-
-### Adding Windows Support
-
-The Windows implementation is currently **stubbed** with `NOT_IMPLEMENTED()` placeholders. To complete Windows support:
-
-1. Implement mutex operations using Windows Critical Sections or SRW locks
-2. Implement condition variables using Windows Condition Variables
-3. Implement thread creation/join using `CreateThread` and `WaitForSingleObject`
-4. Test on Windows to ensure behavior matches POSIX implementation
-
-Refer to [src/win/thread_platform.c](../src/win/thread_platform.c) for detailed TODO comments and Windows API references.
-
-## Best Practices
-
-1. **Choose appropriate pool size**: Match worker count to workload
-2. **Use completion callbacks**: Track task completion for coordination
-3. **Manage context lifetime**: Use cleanup functions in lambdas
-4. **Check return values**: Handle enqueue failures gracefully
-5. **Wait before cleanup**: Call `ak_thread_pool_wait()` before `free()`
-6. **Synchronize shared state**: Protect shared data in task functions
-7. **Set queue limits**: Prevent unbounded memory growth
-
-## Performance Tips
-
-- Start with default configuration and adjust based on profiling
-- Use `max_queue_size` to apply backpressure
-- Minimize work in completion callbacks
-- Batch small tasks to reduce overhead
-- Profile to find optimal worker count for your workload
-
-## API Reference
-
-See `threads.h` for complete API documentation.

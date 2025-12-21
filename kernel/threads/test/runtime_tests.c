@@ -9,7 +9,7 @@
 #include "../../test/assert.h"
 #include "../include/threads.h"
 #include "kernel.h"
-#include <pthread.h>
+
 #include <stdio.h>
 #include <unistd.h>
 
@@ -17,13 +17,13 @@
 typedef struct {
   int value;
   int called;
-  pthread_mutex_t mutex;
+  AK24_MUTEX mutex;
 } test_context_t;
 
 typedef struct {
   int completed;
   int failed;
-  pthread_mutex_t mutex;
+  AK24_MUTEX mutex;
 } completion_context_t;
 
 // Test: Create and free pool
@@ -70,10 +70,10 @@ static void simple_task(void *ctx, void *args) {
   (void)args;
 
   if (context) {
-    pthread_mutex_lock(&context->mutex);
+    AK24_MUTEX_LOCK(&context->mutex);
     context->value++;
     context->called = 1;
-    pthread_mutex_unlock(&context->mutex);
+    AK24_MUTEX_UNLOCK(&context->mutex);
   }
 }
 
@@ -85,7 +85,7 @@ static int test_single_task(void) {
   test_context_t *ctx = AK24_ALLOC(sizeof(test_context_t));
   ctx->value = 0;
   ctx->called = 0;
-  pthread_mutex_init(&ctx->mutex, NULL);
+  AK24_MUTEX_INIT(&ctx->mutex);
 
   ak_lambda_t *task = ak_lambda_new(simple_task, ctx, NULL);
   AK24_TEST_ASSERT_NOT_NULL(task);
@@ -95,15 +95,15 @@ static int test_single_task(void) {
 
   ak_thread_pool_wait(pool);
 
-  pthread_mutex_lock(&ctx->mutex);
+  AK24_MUTEX_LOCK(&ctx->mutex);
   int value = ctx->value;
   int called = ctx->called;
-  pthread_mutex_unlock(&ctx->mutex);
+  AK24_MUTEX_UNLOCK(&ctx->mutex);
 
   AK24_TEST_ASSERT_EQ(value, 1);
   AK24_TEST_ASSERT_EQ(called, 1);
 
-  pthread_mutex_destroy(&ctx->mutex);
+  AK24_MUTEX_DESTROY(&ctx->mutex);
   AK24_FREE(ctx);
 
   ak_thread_pool_free(pool);
@@ -119,7 +119,7 @@ static int test_multiple_tasks(void) {
   test_context_t *ctx = AK24_ALLOC(sizeof(test_context_t));
   ctx->value = 0;
   ctx->called = 0;
-  pthread_mutex_init(&ctx->mutex, NULL);
+  AK24_MUTEX_INIT(&ctx->mutex);
 
   const int num_tasks = 100;
   for (int i = 0; i < num_tasks; i++) {
@@ -132,13 +132,13 @@ static int test_multiple_tasks(void) {
 
   ak_thread_pool_wait(pool);
 
-  pthread_mutex_lock(&ctx->mutex);
+  AK24_MUTEX_LOCK(&ctx->mutex);
   int value = ctx->value;
-  pthread_mutex_unlock(&ctx->mutex);
+  AK24_MUTEX_UNLOCK(&ctx->mutex);
 
   AK24_TEST_ASSERT_EQ(value, num_tasks);
 
-  pthread_mutex_destroy(&ctx->mutex);
+  AK24_MUTEX_DESTROY(&ctx->mutex);
   AK24_FREE(ctx);
 
   ak_thread_pool_free(pool);
@@ -152,13 +152,13 @@ static void completion_callback(void *ctx, void *args) {
   ak_task_state_t *state = (ak_task_state_t *)args;
 
   if (cc && state) {
-    pthread_mutex_lock(&cc->mutex);
+    AK24_MUTEX_LOCK(&cc->mutex);
     if (*state == AK24_TASK_STATE_COMPLETED) {
       cc->completed++;
     } else if (*state == AK24_TASK_STATE_FAILED) {
       cc->failed++;
     }
-    pthread_mutex_unlock(&cc->mutex);
+    AK24_MUTEX_UNLOCK(&cc->mutex);
   }
 }
 
@@ -170,12 +170,12 @@ static int test_completion_callbacks(void) {
   test_context_t *task_ctx = AK24_ALLOC(sizeof(test_context_t));
   task_ctx->value = 0;
   task_ctx->called = 0;
-  pthread_mutex_init(&task_ctx->mutex, NULL);
+  AK24_MUTEX_INIT(&task_ctx->mutex);
 
   completion_context_t *comp_ctx = AK24_ALLOC(sizeof(completion_context_t));
   comp_ctx->completed = 0;
   comp_ctx->failed = 0;
-  pthread_mutex_init(&comp_ctx->mutex, NULL);
+  AK24_MUTEX_INIT(&comp_ctx->mutex);
 
   const int num_tasks = 10;
   for (int i = 0; i < num_tasks; i++) {
@@ -188,16 +188,16 @@ static int test_completion_callbacks(void) {
 
   ak_thread_pool_wait(pool);
 
-  pthread_mutex_lock(&comp_ctx->mutex);
+  AK24_MUTEX_LOCK(&comp_ctx->mutex);
   int completed = comp_ctx->completed;
   int failed = comp_ctx->failed;
-  pthread_mutex_unlock(&comp_ctx->mutex);
+  AK24_MUTEX_UNLOCK(&comp_ctx->mutex);
 
   AK24_TEST_ASSERT_EQ(completed, num_tasks);
   AK24_TEST_ASSERT_EQ(failed, 0);
 
-  pthread_mutex_destroy(&task_ctx->mutex);
-  pthread_mutex_destroy(&comp_ctx->mutex);
+  AK24_MUTEX_DESTROY(&task_ctx->mutex);
+  AK24_MUTEX_DESTROY(&comp_ctx->mutex);
   AK24_FREE(task_ctx);
   AK24_FREE(comp_ctx);
 
@@ -295,8 +295,8 @@ static int test_enqueue_during_shutdown(void) {
   AK24_TEST_ASSERT_NOT_NULL(pool);
 
   // Start shutdown in another thread
-  pthread_t shutdown_thread;
-  pthread_create(&shutdown_thread, NULL, shutdown_helper, pool);
+  AK24_THREAD shutdown_thread;
+  AK24_THREAD_CREATE(&shutdown_thread, shutdown_helper, pool);
 
   // Give shutdown a moment to start
   usleep(1000);
@@ -310,7 +310,7 @@ static int test_enqueue_during_shutdown(void) {
     ak_lambda_free(task);
   }
 
-  pthread_join(shutdown_thread, NULL);
+  AK24_THREAD_JOIN(shutdown_thread);
 
   AK24_TEST_PASS();
 }

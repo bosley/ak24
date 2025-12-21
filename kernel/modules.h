@@ -13,9 +13,9 @@
 #define AK24_KERNEL_MODULES_INTERNAL_H
 
 #include "interfaces.h"
+#include "kernel.h"
 #include "lambda.h"
 #include "map.h"
-#include <pthread.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -39,16 +39,16 @@ typedef enum {
  * Reference counted to prevent unloading while functions are executing.
  */
 typedef struct module_instance_s {
-  void *dl_handle;               /**< dlopen handle */
-  char *path;                    /**< Module file path (owned) */
-  void *module_ctx;              /**< Module's internal context */
-  ak_module_vtable_t vtable;     /**< Module function pointers */
-  ak_lambda_t *unload_callback;  /**< User callback on unload */
-  void *unload_callback_ctx;     /**< Context for unload callback */
-  pthread_mutex_t *access_mutex; /**< Per-module mutex (NULL if !thread_safe) */
-  _Atomic size_t ref_count;      /**< Active function call counter */
-  _Atomic int state;             /**< Current module state (module_state_e) */
-  bool thread_safe;              /**< Whether functions require locking */
+  void *dl_handle;              /**< dlopen handle */
+  char *path;                   /**< Module file path (owned) */
+  void *module_ctx;             /**< Module's internal context */
+  ak_module_vtable_t vtable;    /**< Module function pointers */
+  ak_lambda_t *unload_callback; /**< User callback on unload */
+  void *unload_callback_ctx;    /**< Context for unload callback */
+  AK24_MUTEX *access_mutex;     /**< Per-module mutex (NULL if !thread_safe) */
+  _Atomic size_t ref_count;     /**< Active function call counter */
+  _Atomic int state;            /**< Current module state (module_state_e) */
+  bool thread_safe;             /**< Whether functions require locking */
 } module_instance_t;
 
 /**
@@ -59,7 +59,7 @@ typedef struct module_instance_s {
  */
 typedef struct {
   map_t(module_instance_t *) loaded_modules; /**< path -> instance map */
-  pthread_mutex_t registry_mutex;            /**< Protects map access */
+  AK24_MUTEX registry_mutex;                 /**< Protects map access */
   bool initialized;                          /**< Singleton init flag */
 } module_manager_t;
 

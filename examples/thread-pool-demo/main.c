@@ -1,4 +1,5 @@
 #include "kernel.h"
+#include "threads.h"
 #include <stdio.h>
 #include <unistd.h>
 

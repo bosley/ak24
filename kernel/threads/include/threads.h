@@ -23,7 +23,6 @@
 #define AK24_THREADS_H
 
 #include "lambda.h"
-#include <pthread.h>
 #include <stddef.h>
 
 /**

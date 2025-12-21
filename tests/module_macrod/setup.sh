@@ -51,7 +51,7 @@ cc -std=c11 -Wall -Wextra -O2 \
     ${SHARED_FLAG} \
     -fPIC \
     -I"${LIB_DIR}" \
-    -I"${AK24_HOME}/include/ak24" \
+    -I"${AK24_HOME}/include" \
     -o "${OUTPUT}" \
     "${LIB_DIR}/lib.c"
 

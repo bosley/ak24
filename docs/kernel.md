@@ -46,15 +46,32 @@ Access stats via `ak_mem_get_stats()` or `ak_mem_print_stats()`. Stats are autom
 
 ## Threading
 
-When GC is enabled:
-- AK24_THREAD_CREATE -> GC_pthread_create (registers thread with GC)
-- AK24_THREAD_JOIN -> pthread_join
-- AK24_THREAD_DETACH -> pthread_detach
+The kernel provides platform-agnostic threading abstractions:
 
-When GC is disabled:
-- AK24_THREAD_CREATE -> pthread_create
-- AK24_THREAD_JOIN -> pthread_join
-- AK24_THREAD_DETACH -> pthread_detach
+**Thread Types:**
+- `AK24_THREAD` - Platform-agnostic thread handle
+- `AK24_MUTEX` - Platform-agnostic mutex
+- `AK24_COND` - Platform-agnostic condition variable
+
+**Thread Operations:**
+- `AK24_THREAD_CREATE` - Create thread (GC-aware when GC enabled)
+- `AK24_THREAD_JOIN` - Wait for thread completion
+- `AK24_THREAD_DETACH` - Detach thread
+
+**Mutex Operations:**
+- `AK24_MUTEX_INIT` - Initialize mutex
+- `AK24_MUTEX_DESTROY` - Destroy mutex
+- `AK24_MUTEX_LOCK` - Lock mutex
+- `AK24_MUTEX_UNLOCK` - Unlock mutex
+
+**Condition Variable Operations:**
+- `AK24_COND_INIT` - Initialize condition variable
+- `AK24_COND_DESTROY` - Destroy condition variable
+- `AK24_COND_WAIT` - Wait on condition variable
+- `AK24_COND_SIGNAL` - Signal one waiting thread
+- `AK24_COND_BROADCAST` - Signal all waiting threads
+
+These abstractions work on both POSIX (Linux, macOS, BSD) and Windows platforms. When GC is enabled, thread creation automatically registers threads with the garbage collector.
 
 ## Initialization
 
@@ -158,15 +175,89 @@ void *worker(void *arg) {
 int main(void) {
   ak_kernel_init();
 
-  pthread_t thread;
-  AK24_THREAD_CREATE(&thread, NULL, worker, NULL);
+  AK24_THREAD thread;
+  AK24_THREAD_CREATE(&thread, worker, NULL);
 
-  void *result;
-  AK24_THREAD_JOIN(thread, &result);
+  AK24_THREAD_JOIN(thread);
 
   ak_kernel_deinit();
   return 0;
 }
+```
+
+## Signal Handling
+
+Register lambdas to handle OS signals (SIGINT, SIGTERM, etc.):
+
+```c
+void handle_interrupt(void *captured, void *args) {
+  int *signum = (int *)args;
+  printf("Caught signal %d\n", *signum);
+}
+
+int main(void) {
+  ak_kernel_init();
+
+  ak_lambda_t *handler = ak_lambda_new(handle_interrupt, NULL, NULL);
+  ak_register_signal_handler(SIGINT, handler);
+
+  // Your application code
+
+  ak_unregister_signal_handler(SIGINT);
+  ak_kernel_deinit();
+  return 0;
+}
+```
+
+The application framework provides a simpler interface:
+
+```c
+APP_ON_SIGNAL(handle_sigint, SIGINT) {
+  printf("Interrupted!\n");
+}
+
+APP_MAIN(my_app) {
+  AK24_REGISTER_SIGNAL_HANDLER(handle_sigint);
+  // Your application code
+  return 0;
+}
+
+AK24_APPLICATION(my_app, NULL)
+```
+
+## Logging
+
+Built-in logging system with six severity levels:
+
+```c
+AK24_LOG_TRACE("Detailed trace: %d", value);
+AK24_LOG_DEBUG("Debug info: %s", str);
+AK24_LOG_INFO("Application started");
+AK24_LOG_WARN("Warning: %s", message);
+AK24_LOG_ERROR("Error: %d", error_code);
+AK24_LOG_FATAL("Fatal error!");
+```
+
+Configure logging behavior:
+
+```c
+ak_log_set_level(AK24_LOG_LEVEL_DEBUG);  // Filter below DEBUG
+ak_log_set_quiet(true);                   // Disable console output
+ak_log_set_colors(false);                 // Disable color output
+ak_log_add_fp(file_ptr, AK24_LOG_LEVEL_INFO);  // Log to file
+```
+
+For thread-safe logging, provide a lock function:
+
+```c
+AK24_MUTEX log_mutex = AK24_MUTEX_INITIALIZER;
+
+void log_lock(bool lock, void *udata) {
+  if (lock) AK24_MUTEX_LOCK((AK24_MUTEX *)udata);
+  else AK24_MUTEX_UNLOCK((AK24_MUTEX *)udata);
+}
+
+ak_log_set_lock(log_lock, &log_mutex);
 ```
 
 ## Testing Macros
@@ -212,14 +303,46 @@ AK24_TEST_ASSERT_ATOMIC(condition);
 AK24_TEST_ASSERT_EQ_ATOMIC(a, b);
 ```
 
+## Module System
+
+Load and manage dynamic modules at runtime:
+
+```c
+ak_module_ctx_t *mod_ctx = ak_module_get_system_ctx();
+
+ak_module_load_options_t opts = {
+  .module_path = "./my_module.so",
+  .thread_safe = true,
+  .unload_callback = NULL
+};
+
+const char *error = NULL;
+ak_module_handle_t *handle = mod_ctx->load_module(&opts, &error);
+
+if (handle) {
+  void *fn = ak_handle_get_function(handle, "my_function");
+  const char *name = ak_handle_get_info(handle, "name");
+
+  mod_ctx->unload_module(handle, &error);
+}
+
+ak_module_free_system_ctx(mod_ctx);
+```
+
+Modules must implement the `ak_module_vtable_t` interface defined in [interfaces.h](../kernel/interfaces.h).
+
 ## Included Modules
 
 - arbuff - Lock-free atomic ring buffer
+- atoms - Interned immutable strings (atom cube)
 - buffer - Dynamic byte array
 - context - Hierarchical scoped key-value store
+- forms - S-expression parsing and manipulation
 - lambda - Function closures with captured context
 - list - Generic dynamic array
+- log - Thread-safe logging system
 - map - Generic hash table
+- scanner - Token scanning and pattern matching
 
 ## Shutdown Callbacks
 
@@ -266,6 +389,25 @@ int main(void) {
 - `ak_mem_print_stats()` - Print memory statistics (debug builds only)
 
 ### Threading
-- `AK24_THREAD_CREATE(thread, attr, fn, arg)` - Create thread
-- `AK24_THREAD_JOIN(thread, retval)` - Join thread
+- `AK24_THREAD_CREATE(thread, fn, arg)` - Create thread
+- `AK24_THREAD_JOIN(thread)` - Join thread
 - `AK24_THREAD_DETACH(thread)` - Detach thread
+
+### Signal Handling
+- `ak_register_signal_handler(signum, lambda)` - Register signal handler
+- `ak_unregister_signal_handler(signum)` - Unregister signal handler
+- `APP_ON_SIGNAL(name, signum)` - Define signal handler (application framework)
+- `AK24_REGISTER_SIGNAL_HANDLER(handler)` - Register handler in APP_MAIN
+
+### Logging
+- `AK24_LOG_TRACE/DEBUG/INFO/WARN/ERROR/FATAL(...)` - Log messages
+- `ak_log_set_level(level)` - Set minimum log level
+- `ak_log_set_quiet(enable)` - Enable/disable console output
+- `ak_log_set_lock(fn, udata)` - Enable thread-safe logging
+- `ak_log_add_fp(file, level)` - Add file output target
+
+### Module System
+- `ak_module_get_system_ctx()` - Get module system context
+- `ak_module_free_system_ctx(ctx)` - Free module context
+- `ak_handle_get_function(handle, name)` - Get function from module
+- `ak_handle_get_info(handle, key)` - Get module metadata

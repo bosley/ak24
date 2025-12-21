@@ -36,19 +36,26 @@ file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/*.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/log/src/*.c
 )
+
+# Add base kernel sources (non-platform/GC specific)
+list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/kernel.c)
+list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/modules.c)
 
 # Platform-specific threading sources
 if(WIN32)
     file(GLOB THREADS_PLATFORM_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/win/*.c
     )
+    # Add Windows-specific kernel sources
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/win.c)
 else()
     file(GLOB THREADS_PLATFORM_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/nix/*.c
     )
+    # Add POSIX-specific kernel sources
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/posix.c)
 endif()
 
 # Exclude platform-specific directories from main glob
@@ -56,6 +63,13 @@ list(FILTER KERNEL_SOURCES EXCLUDE REGEX ".*/src/(nix|win)/.*")
 
 # Add platform-specific sources
 list(APPEND KERNEL_SOURCES ${THREADS_PLATFORM_SOURCES})
+
+# Add GC or non-GC specific sources
+if(AK24_GC_ENABLED)
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/gc.c)
+else()
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/nogc.c)
+endif()
 
 file(GLOB_RECURSE KERNEL_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/map/test/*.c
@@ -125,8 +139,14 @@ endif()
 # Platform-specific threading libraries
 if(UNIX OR APPLE)
     target_link_libraries(ak24_kernel PUBLIC pthread)
+    message(STATUS "Threading: POSIX pthreads")
 elseif(WIN32)
-    # Windows threading is built into kernel32.lib (linked by default)
+    # Windows threading is built into kernel32.lib (linked by default on Windows)
+    # Explicitly link if needed for MinGW
+    if(NOT MSVC)
+        target_link_libraries(ak24_kernel PUBLIC kernel32)
+    endif()
+    message(STATUS "Threading: Windows native (kernel32)")
 endif()
 
 set_target_properties(ak24_kernel PROPERTIES
@@ -262,6 +282,11 @@ install(TARGETS ak24_kernel
 # Install kernel headers
 install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/ak_debug.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/ak_nix.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/ak_win.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/ak_gc.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/ak_nogc.h
     ${CMAKE_CURRENT_SOURCE_DIR}/application.h
     ${CMAKE_CURRENT_SOURCE_DIR}/interfaces.h
     ${CMAKE_CURRENT_SOURCE_DIR}/modules.h

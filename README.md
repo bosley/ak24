@@ -4,9 +4,13 @@
 
 # AK24
 
-## About
-
 AK24 (Application Kernel 24) is a C library that provides data structures, memory management primitives, and utilities for building applications. The kernel (K) is the foundation, offering containers, lambda abstractions, context management, and optional Boehm GC integration. All components are tested at compile-time. The library can be embedded as a base layer in larger systems.
+
+## Platform Support
+
+The AK24 kernel currently targets nix (Unix-like) systems. Windows support is planned and actively targeted; several compatibility hurdles are in progress. The final major hurdle is the `modules` subsystem, which is POSIX-only right now. This work is backburnered until the broader system stabilizes.
+
+The `kernel` core already routes all thread functions correctly. Once the kernel supports Windows, AK24 applications will be able to run on Windows without changes.
 
 ## Kernel
 
@@ -63,6 +67,7 @@ Thread-safe lock-free MPMC circular buffer for `void*` pointers. Uses sequence-b
 **Documentation**: [kernel/arbuff/docs/arbuff.md](kernel/arbuff/docs/arbuff.md)
 
 </details>
+
 
 <details>
 <summary><h3>atoms</h3></summary>

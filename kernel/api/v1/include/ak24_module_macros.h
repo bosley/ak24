@@ -16,7 +16,7 @@
 #ifndef AK24_MODULE_MACROS_H
 #define AK24_MODULE_MACROS_H
 
-#include <interfaces.h>
+#include <ak24/interfaces.h>
 #include <stdio.h>
 #include <string.h>
 

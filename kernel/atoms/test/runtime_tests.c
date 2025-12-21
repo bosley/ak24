@@ -1,7 +1,7 @@
 #include "atom.h"
 #include "kernel.h"
 #include "test/assert.h"
-#include <pthread.h>
+
 #include <stdio.h>
 #include <unistd.h>
 
@@ -294,8 +294,8 @@ static int test_atom_concurrent_access(void) {
 #define NUM_READERS 2
 #define ITERATIONS 50
 
-  pthread_t writers[NUM_WRITERS];
-  pthread_t readers[NUM_READERS];
+  AK24_THREAD writers[NUM_WRITERS];
+  AK24_THREAD readers[NUM_READERS];
   thread_data_t writer_data[NUM_WRITERS];
   thread_data_t reader_data[NUM_READERS];
 
@@ -303,22 +303,22 @@ static int test_atom_concurrent_access(void) {
     writer_data[i].atom = atom;
     writer_data[i].thread_id = i;
     writer_data[i].iterations = ITERATIONS;
-    AK24_THREAD_CREATE(&writers[i], NULL, writer_thread, &writer_data[i]);
+    AK24_THREAD_CREATE(&writers[i], writer_thread, &writer_data[i]);
   }
 
   for (int i = 0; i < NUM_READERS; i++) {
     reader_data[i].atom = atom;
     reader_data[i].thread_id = i;
     reader_data[i].iterations = ITERATIONS;
-    AK24_THREAD_CREATE(&readers[i], NULL, reader_thread, &reader_data[i]);
+    AK24_THREAD_CREATE(&readers[i], reader_thread, &reader_data[i]);
   }
 
   for (int i = 0; i < NUM_WRITERS; i++) {
-    AK24_THREAD_JOIN(writers[i], NULL);
+    AK24_THREAD_JOIN(writers[i]);
   }
 
   for (int i = 0; i < NUM_READERS; i++) {
-    AK24_THREAD_JOIN(readers[i], NULL);
+    AK24_THREAD_JOIN(readers[i]);
   }
 
 #undef NUM_WRITERS

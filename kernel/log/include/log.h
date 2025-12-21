@@ -156,14 +156,14 @@ const char *ak_log_level_string(ak_log_level_t level);
  *
  * @par Example:
  * @code
- * pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
+ * AK24_MUTEX log_mutex = AK24_MUTEX_INITIALIZER;
  *
  * void log_lock(bool lock, void *udata) {
- *   pthread_mutex_t *mtx = (pthread_mutex_t *)udata;
+ *   AK24_MUTEX *mtx = (AK24_MUTEX *)udata;
  *   if (lock) {
- *     pthread_mutex_lock(mtx);
+ *     AK24_MUTEX_LOCK(mtx);
  *   } else {
- *     pthread_mutex_unlock(mtx);
+ *     AK24_MUTEX_UNLOCK(mtx);
  *   }
  * }
  *

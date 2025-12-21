@@ -379,6 +379,142 @@ if (handle) {
 ak_module_free_system_ctx(mod_ctx);
 ```
 
+## Utility Modules
+
+### UTF-8 Text Handling
+
+The UTF-8 module provides utilities for working with UTF-8 encoded text:
+
+```c
+const uint8_t *text = (uint8_t *)"Hello 世界 café 🎉";
+size_t byte_len = strlen((char *)text);
+
+// Count characters (not bytes)
+size_t char_count = ak_utf8_char_count(text, byte_len);
+
+// Validate UTF-8 encoding
+if (ak_utf8_validate(text, byte_len)) {
+  printf("Valid UTF-8\n");
+}
+
+// Get byte length of first character
+size_t first_char_bytes = ak_utf8_char_size(text);
+
+// Decode codepoints
+const uint8_t *ptr = text;
+while (*ptr) {
+  uint32_t codepoint = ak_utf8_decode(ptr, &ptr);
+  // Process codepoint
+}
+
+// Character classification
+if (ak_utf8_is_whitespace(codepoint)) { }
+if (ak_utf8_is_digit(codepoint)) { }
+if (ak_utf8_is_alpha(codepoint)) { }
+```
+
+**Documentation**: [kernel/utf8/docs/utf8.md](kernel/utf8/docs/utf8.md)
+
+### String Interning
+
+String interning ensures only one copy of each unique string exists, enabling O(1) equality checks:
+
+```c
+// Intern strings
+const char *s1 = ak_intern("identifier");
+const char *s2 = ak_intern("identifier");
+assert(s1 == s2);  // Same pointer!
+
+// Intern substring
+const char *source = "identifier+123";
+const char *id = ak_intern_n(source, 10);  // "identifier"
+
+// Check if already interned (doesn't create new entry)
+const char *existing = ak_intern_lookup("identifier");
+
+// Statistics
+ak_intern_stats_t stats = ak_intern_get_stats();
+printf("Interned: %zu strings, %zu bytes\n",
+       stats.string_count, stats.total_bytes);
+```
+
+**Use cases**: Symbol table keys, identifiers, type names, configuration keys
+
+**Documentation**: [kernel/intern/docs/intern.md](kernel/intern/docs/intern.md)
+
+### File Path Manipulation
+
+Cross-platform file path handling:
+
+```c
+// Join paths with correct separator
+ak_buffer_t *path = ak_filepath_join(3, "/home", "user", "file.txt");
+// POSIX: "/home/user/file.txt"
+// Windows: "\\home\\user\\file.txt"
+
+// Get system directories
+ak_buffer_t *home = ak_filepath_home();       // User home
+ak_buffer_t *cache = ak_filepath_cache();     // Cache directory
+ak_buffer_t *config = ak_filepath_config();   // Config directory
+ak_buffer_t *data = ak_filepath_data();       // Data directory
+ak_buffer_t *temp = ak_filepath_temp();       // Temp directory
+
+// Extract path components
+const char *base = ak_filepath_basename("/path/to/file.txt");  // "file.txt"
+const char *dir = ak_filepath_dirname("/path/to/file.txt");    // "/path/to"
+const char *ext = ak_filepath_extension("file.txt");           // ".txt"
+
+// Normalize paths (resolve . and ..)
+ak_buffer_t *normalized = ak_filepath_normalize("/path/./to/../file.txt");
+// Result: "/path/file.txt"
+
+// Check path properties
+if (ak_filepath_is_absolute("/path/to/file")) { }
+if (ak_filepath_is_relative("../file")) { }
+
+// Platform separators
+char sep = ak_filepath_separator();       // '/' or '\\'
+char list_sep = ak_filepath_list_separator();  // ':' or ';'
+
+ak_buffer_free(path);
+ak_buffer_free(normalized);
+```
+
+**Documentation**: [kernel/filepath/docs/filepath.md](kernel/filepath/docs/filepath.md)
+
+### Source Location Tracking
+
+Compiler-focused module for tracking source code positions:
+
+```c
+// Load source file
+ak_source_file_t *file = ak_source_file_from_path("input.c");
+
+// Create location from byte offset
+ak_source_loc_t loc = ak_source_loc_from_offset(file, 42);
+printf("Error at %s:%zu:%zu\n",
+       ak_source_file_filename(file), loc.line, loc.column);
+
+// Create source range
+ak_source_range_t range = ak_source_range_new(file, 10, 50);
+
+// Extract source text
+const char *text = ak_source_range_text(&range);
+printf("Source: %s\n", text);
+
+// Get line text
+const char *line = ak_source_file_get_line_text(file, 5);
+
+// Reference counting
+ak_source_file_retain(file);   // Increment refcount
+ak_source_file_release(file);  // Decrement (frees at 0)
+ak_source_file_release(file);
+```
+
+**Use cases**: Compiler error messages, syntax highlighting, IDE features, debug info
+
+**Documentation**: [kernel/sourceloc/docs/sourceloc.md](kernel/sourceloc/docs/sourceloc.md)
+
 Modules must implement the `ak_module_vtable_t` interface defined in [interfaces.h](../kernel/interfaces.h).
 
 ## Included Modules

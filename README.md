@@ -40,7 +40,12 @@ make
 
 Run tests:
 ```bash
-make test
+./ak24.sh test
+```
+
+Run complete CI test suite (all configurations):
+```bash
+./ak24.sh ci
 ```
 
 Build with GC disabled:

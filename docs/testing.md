@@ -197,11 +197,42 @@ These tests validate:
 ./ak24.sh test
 ```
 
-Runs both compile-time and integration tests with automatic build and installation.
+Runs both compile-time and integration tests with automatic build and installation for the current build mode.
+
+### Complete CI Test Suite
+
+```bash
+./ak24.sh ci
+```
+
+Runs the complete continuous integration test suite across **all three configurations**:
+1. GC mode (production)
+2. ASAN mode (memory debugging)
+3. Manual mode (no GC, no ASAN)
+
+This command:
+- Builds, installs, and tests each configuration sequentially
+- Stops immediately on any failure
+- Automatically cleans up and uninstalls after all tests pass
+- Provides a final summary report
+
+**Use this for comprehensive validation** before commits or releases to ensure your code works correctly in all supported build configurations.
 
 ## Continuous Integration Recommendations
 
-For CI/CD pipelines, run all three configurations:
+For CI/CD pipelines, use the automated CI test suite:
+
+```bash
+./ak24.sh ci
+```
+
+This single command replaces the manual approach and automatically:
+- Tests all three configurations (GC, ASAN, Manual)
+- Fails fast on any error
+- Cleans up after completion
+- Provides comprehensive test coverage
+
+**Manual approach** (if you need more control):
 
 ```bash
 #!/bin/bash

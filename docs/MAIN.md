@@ -46,6 +46,16 @@ cmake -DAK24_GC_ENABLED=ON ..
 make
 ```
 
+### Application Framework
+
+AK24 provides an application framework that handles initialization, argument processing, and shutdown. Applications are defined using three key macros:
+
+- **`APP_MAIN(name)`** - Defines the main application entry point
+- **`APP_ON_SHUTDOWN(name)`** - Defines a shutdown handler
+- **`AK24_APPLICATION(app_id, main_fn, shutdown_fn)`** - Binds everything together
+
+The **application ID** is a string that identifies your application and is used for runtime directory isolation. It should be unique to your application (e.g., `"my-app"`, `"my-app-v1"`).
+
 ### Basic Usage
 
 ```c
@@ -68,7 +78,7 @@ APP_ON_SHUTDOWN(cleanup) {
     AK24_LOG_INFO("Shutting down");
 }
 
-AK24_APPLICATION(my_app, cleanup)
+AK24_APPLICATION("my-app", my_app, cleanup)
 ```
 
 ## Build Options

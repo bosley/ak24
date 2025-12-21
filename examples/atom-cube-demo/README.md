@@ -65,6 +65,6 @@ The cube rotates continuously, and atom values pulse in waves radiating from the
 The example follows the AK24 application pattern:
 - `APP_MAIN(app_main)`: Parses args, allocates cube, bonds atoms, starts animation
 - `APP_ON_SHUTDOWN(on_shutdown)`: Cleanup and statistics
-- `AK24_APPLICATION(app_main, on_shutdown)`: Application macro
+- `AK24_APPLICATION(app_id, app_main, on_shutdown)`: Application macro
 
 Uses only the kernel's `atoms` API - no additional kernel code required.

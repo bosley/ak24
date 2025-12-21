@@ -272,7 +272,7 @@ APP_MAIN(my_app) {
   return 0;
 }
 
-AK24_APPLICATION(my_app, NULL)
+AK24_APPLICATION("my-app", my_app, NULL)
 ```
 
 ## Logging
@@ -564,7 +564,7 @@ int main(void) {
 ### Application Framework Macros
 - `APP_MAIN(name)` - Define application main entry point (receives ak_app_context_t *ctx)
 - `APP_ON_SHUTDOWN(name)` - Define shutdown handler (receives ak_app_context_t *ctx)
-- `AK24_APPLICATION(main_fn, shutdown_fn)` - Wire up application with automatic initialization
+- `AK24_APPLICATION(app_id, main_fn, shutdown_fn)` - Wire up application with automatic initialization
 
 ### Memory Management
 - `AK24_ALLOC(size)` - Allocate memory

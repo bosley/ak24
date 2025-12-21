@@ -1,5 +1,6 @@
 #include "scanner.h"
 #include "kernel.h"
+#include "utf8.h"
 
 ak_scanner_t *ak_scanner_new(ak_buffer_t *buffer, size_t position) {
   if (!buffer) {
@@ -29,11 +30,49 @@ void ak_scanner_free(ak_scanner_t *scanner) {
   AK24_FREE(scanner);
 }
 
-static bool is_whitespace(uint8_t c) {
-  return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+// UTF-8 aware helper: check if current position is whitespace
+static bool is_whitespace_at(ak_buffer_t *buf, size_t pos) {
+  if (pos >= buf->count) {
+    return false;
+  }
+
+  size_t remaining = buf->count - pos;
+  ak_utf8_decode_result_t result = ak_utf8_decode(buf->data + pos, remaining);
+
+  if (!result.valid) {
+    // For invalid sequences, fall back to ASCII check
+    uint8_t c = buf->data[pos];
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+  }
+
+  return ak_utf8_is_whitespace(result.codepoint);
 }
 
-static bool is_digit(uint8_t c) { return c >= '0' && c <= '9'; }
+// UTF-8 aware helper: check if current position is a digit
+static bool is_digit_at(ak_buffer_t *buf, size_t pos) {
+  if (pos >= buf->count) {
+    return false;
+  }
+
+  size_t remaining = buf->count - pos;
+  ak_utf8_decode_result_t result = ak_utf8_decode(buf->data + pos, remaining);
+
+  if (!result.valid) {
+    // For invalid sequences, fall back to ASCII check
+    uint8_t c = buf->data[pos];
+    return c >= '0' && c <= '9';
+  }
+
+  return ak_utf8_is_digit(result.codepoint);
+}
+
+// Get byte length of character at position (UTF-8 aware)
+static size_t char_byte_len_at(ak_buffer_t *buf, size_t pos) {
+  if (pos >= buf->count) {
+    return 0;
+  }
+  return ak_utf8_char_len(buf->data + pos, buf->count - pos);
+}
 
 static bool is_stop_symbol(uint8_t c, ak_scanner_stop_symbols_t *stop_symbols) {
   if (!stop_symbols || !stop_symbols->symbols) {
@@ -77,8 +116,12 @@ ak_scanner_read_static_base_type(ak_scanner_t *scanner,
   size_t pos = start_pos;
   ak_buffer_t *buf = scanner->buffer;
 
-  while (pos < buf->count && is_whitespace(buf->data[pos])) {
-    pos++;
+  // Skip leading whitespace (UTF-8 aware)
+  while (pos < buf->count && is_whitespace_at(buf, pos)) {
+    size_t char_len = char_byte_len_at(buf, pos);
+    if (char_len == 0)
+      break;
+    pos += char_len;
   }
 
   if (pos >= buf->count) {
@@ -123,15 +166,15 @@ ak_scanner_read_static_base_type(ak_scanner_t *scanner,
     if (pos >= buf->count) {
       state = STATE_SYMBOL;
       pos = token_start + 1;
-    } else if (is_digit(buf->data[pos])) {
+    } else if (is_digit_at(buf, pos)) {
       state = STATE_INTEGER;
-    } else if (is_whitespace(buf->data[pos])) {
+    } else if (is_whitespace_at(buf, pos)) {
       state = STATE_SYMBOL;
       pos = token_start + 1;
     } else {
       state = STATE_SYMBOL;
     }
-  } else if (is_digit(first_char)) {
+  } else if (is_digit_at(buf, pos)) {
     state = STATE_INTEGER;
   } else {
     state = STATE_SYMBOL;
@@ -140,7 +183,7 @@ ak_scanner_read_static_base_type(ak_scanner_t *scanner,
   while (pos < buf->count && state != STATE_ERROR) {
     uint8_t c = buf->data[pos];
 
-    if (is_whitespace(c)) {
+    if (is_whitespace_at(buf, pos)) {
       break;
     }
 
@@ -150,7 +193,7 @@ ak_scanner_read_static_base_type(ak_scanner_t *scanner,
 
     switch (state) {
     case STATE_INTEGER:
-      if (is_digit(c)) {
+      if (is_digit_at(buf, pos)) {
         pos++;
       } else if (c == '.') {
         has_period = true;
@@ -163,7 +206,7 @@ ak_scanner_read_static_base_type(ak_scanner_t *scanner,
       break;
 
     case STATE_REAL:
-      if (is_digit(c)) {
+      if (is_digit_at(buf, pos)) {
         pos++;
       } else if (c == '.') {
         state = STATE_ERROR;
@@ -173,7 +216,15 @@ ak_scanner_read_static_base_type(ak_scanner_t *scanner,
       break;
 
     case STATE_SYMBOL:
-      pos++;
+      // For symbols, advance by full UTF-8 character length
+      {
+        size_t char_len = char_byte_len_at(buf, pos);
+        if (char_len == 0) {
+          state = STATE_ERROR;
+        } else {
+          pos += char_len;
+        }
+      }
       break;
 
     default:
@@ -255,8 +306,11 @@ ak_scanner_find_group_result_t ak_scanner_find_group(ak_scanner_t *scanner,
   }
 
   if (consume_leading_ws) {
-    while (pos < buf->count && is_whitespace(buf->data[pos])) {
-      pos++;
+    while (pos < buf->count && is_whitespace_at(buf, pos)) {
+      size_t char_len = char_byte_len_at(buf, pos);
+      if (char_len == 0)
+        break;
+      pos += char_len;
     }
 
     if (pos >= buf->count) {
@@ -333,8 +387,12 @@ bool ak_scanner_goto_next_non_white(ak_scanner_t *scanner) {
 
   size_t pos = scanner->position;
 
-  while (pos < buf->count && is_whitespace(buf->data[pos])) {
-    pos++;
+  // UTF-8 aware whitespace skipping
+  while (pos < buf->count && is_whitespace_at(buf, pos)) {
+    size_t char_len = char_byte_len_at(buf, pos);
+    if (char_len == 0)
+      break;
+    pos += char_len;
   }
 
   if (pos >= buf->count) {
@@ -358,8 +416,12 @@ bool ak_scanner_skip_whitespace_and_comments(ak_scanner_t *scanner) {
   size_t pos = scanner->position;
 
   while (pos < buf->count) {
-    if (is_whitespace(buf->data[pos])) {
-      pos++;
+    // UTF-8 aware whitespace check
+    if (is_whitespace_at(buf, pos)) {
+      size_t char_len = char_byte_len_at(buf, pos);
+      if (char_len == 0)
+        break;
+      pos += char_len;
       continue;
     }
 

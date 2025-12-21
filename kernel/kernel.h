@@ -36,6 +36,7 @@
 #include "log.h"
 #include "map.h"
 #include "scanner.h"
+#include "sourceloc.h"
 
 #include <stddef.h>
 #include <time.h>

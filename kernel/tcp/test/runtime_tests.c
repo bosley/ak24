@@ -1,15 +1,3 @@
-/**
- * @file runtime_tests.c
- * @brief TCP module runtime tests
- *
- * Comprehensive tests for TCP server functionality including:
- * - Connection handling and lifecycle
- * - Data integrity validation (byte-for-byte)
- * - Multiple message sizes (small, medium, large)
- * - Binary data transfer
- * - Sequential message handling
- * - Concurrent connections
- */
 
 #include "kernel.h"
 #include "tcp.h"
@@ -30,26 +18,19 @@
 #include <unistd.h>
 #endif
 
-// Test port (use ephemeral port range)
 #define TEST_PORT 19000
 
-// Test data sizes
 #define SMALL_DATA_SIZE 64
 #define MEDIUM_DATA_SIZE 1024
 #define LARGE_DATA_SIZE 8192
 #define MAX_MESSAGES 10
 
-// Test state tracking
 static int connections_accepted = 0;
 static int connections_handled = 0;
 static int connections_disconnected = 0;
 static int total_bytes_received = 0;
 static int total_bytes_sent = 0;
 static int data_validation_errors = 0;
-
-// ============================================================================
-// Test Callbacks
-// ============================================================================
 
 static void on_connect_accept_all(void *captured, void *args) {
   (void)captured;
@@ -72,20 +53,17 @@ static void on_connect_reject_all(void *captured, void *args) {
   info->accept = false;
 }
 
-// Silent handler - holds connection open but sends nothing (for timeout tests)
-// Will detect when client disconnects and exit
 static void on_handle_silent(void *captured, void *args) {
   (void)captured;
   ak_tcp_ctx_t *ctx = (ak_tcp_ctx_t *)args;
 
   connections_handled++;
-  // Wait until client disconnects - ak_tcp_is_alive now detects peer close
+
   while (ak_tcp_is_alive(ctx)) {
-    usleep(50000); // 50ms
+    usleep(50000);
   }
 }
 
-// Echo handler - echoes back exactly what it receives until newline
 static void on_handle_echo(void *captured, void *args) {
   (void)captured;
   ak_tcp_ctx_t *ctx = (ak_tcp_ctx_t *)args;
@@ -104,12 +82,10 @@ static void on_handle_echo(void *captured, void *args) {
     total_bytes_sent += (int)ak_buffer_count(line);
     ak_buffer_free(line);
 
-    // Exit after first message for simple tests
     break;
   }
 }
 
-// Multi-message echo handler - handles multiple messages per connection
 static void on_handle_multi_echo(void *captured, void *args) {
   (void)captured;
   ak_tcp_ctx_t *ctx = (ak_tcp_ctx_t *)args;
@@ -127,12 +103,10 @@ static void on_handle_multi_echo(void *captured, void *args) {
     msg_count++;
     total_bytes_received += (int)ak_buffer_count(line);
 
-    // Echo back
     ak_tcp_send(ctx, line, &error);
     total_bytes_sent += (int)ak_buffer_count(line);
     ak_buffer_free(line);
 
-    // Handle up to MAX_MESSAGES
     if (msg_count >= MAX_MESSAGES) {
       break;
     }
@@ -141,8 +115,6 @@ static void on_handle_multi_echo(void *captured, void *args) {
   ak_tcp_set_meta(ctx, "msg_count", (void *)(intptr_t)msg_count);
 }
 
-// Binary data handler - receives length-prefixed binary data and echoes it back
-// Protocol: 4-byte length (network order) + data
 static void on_handle_binary_echo(void *captured, void *args) {
   (void)captured;
   ak_tcp_ctx_t *ctx = (ak_tcp_ctx_t *)args;
@@ -153,7 +125,6 @@ static void on_handle_binary_echo(void *captured, void *args) {
     const char *error = NULL;
     ak_buffer_t *recv_buf = ak_buffer_new(4);
 
-    // Read 4-byte length prefix
     ssize_t received = ak_tcp_recv(ctx, recv_buf, 4, &error);
     if (received != 4) {
       ak_buffer_free(recv_buf);
@@ -170,7 +141,6 @@ static void on_handle_binary_echo(void *captured, void *args) {
       break;
     }
 
-    // Read the payload
     size_t total_read = 0;
     while (total_read < length && ak_tcp_is_alive(ctx)) {
       ssize_t n = ak_tcp_recv(ctx, recv_buf, length - total_read, &error);
@@ -187,7 +157,6 @@ static void on_handle_binary_echo(void *captured, void *args) {
 
     total_bytes_received += (int)(4 + length);
 
-    // Echo back with same length prefix
     ak_buffer_t *send_buf = ak_buffer_new(4 + length);
     uint8_t len_bytes[4] = {(uint8_t)(length >> 24), (uint8_t)(length >> 16),
                             (uint8_t)(length >> 8), (uint8_t)length};
@@ -200,7 +169,6 @@ static void on_handle_binary_echo(void *captured, void *args) {
     ak_buffer_free(recv_buf);
     ak_buffer_free(send_buf);
 
-    // Handle one binary message then exit
     break;
   }
 }
@@ -210,10 +178,6 @@ static void on_disconnect_log(void *captured, void *args) {
   (void)args;
   connections_disconnected++;
 }
-
-// ============================================================================
-// Helper: Generate test data patterns
-// ============================================================================
 
 static void generate_sequential_data(uint8_t *buf, size_t len) {
   for (size_t i = 0; i < len; i++) {
@@ -229,10 +193,10 @@ static void generate_random_data(uint8_t *buf, size_t len, unsigned int seed) {
 }
 
 static void generate_binary_pattern(uint8_t *buf, size_t len) {
-  // Include all byte values including 0x00, 0xFF, and edge cases
+
   for (size_t i = 0; i < len; i++) {
     if (i % 256 == 0) {
-      buf[i] = 0x00; // NULL byte
+      buf[i] = 0x00;
     } else if (i % 256 == 255) {
       buf[i] = 0xFF;
     } else {
@@ -246,7 +210,7 @@ static int validate_data(const uint8_t *expected, const uint8_t *actual,
   int errors = 0;
   for (size_t i = 0; i < len; i++) {
     if (expected[i] != actual[i]) {
-      if (errors < 5) { // Only print first 5 errors
+      if (errors < 5) {
         printf("  [%s] Mismatch at byte %zu: expected 0x%02X, got 0x%02X\n",
                test_name, i, expected[i], actual[i]);
       }
@@ -259,10 +223,6 @@ static int validate_data(const uint8_t *expected, const uint8_t *actual,
   }
   return errors;
 }
-
-// ============================================================================
-// Helper: Full-duplex test client with validation
-// ============================================================================
 
 typedef struct {
   ak_socket_fd_t sock;
@@ -344,7 +304,6 @@ static ssize_t test_client_recv_all(test_client_t *client, uint8_t *buf,
   return (ssize_t)total_received;
 }
 
-// Legacy helper for simple string tests
 static int test_client_connect_and_send(uint16_t port, const char *message,
                                         char *response, size_t response_size) {
   test_client_t client = {0};
@@ -375,10 +334,6 @@ static int test_client_connect_and_send(uint16_t port, const char *message,
   return 0;
 }
 
-// ============================================================================
-// Reset test state
-// ============================================================================
-
 static void reset_test_state(void) {
   connections_accepted = 0;
   connections_handled = 0;
@@ -388,27 +343,19 @@ static void reset_test_state(void) {
   data_validation_errors = 0;
 }
 
-// ============================================================================
-// Tests
-// ============================================================================
-
 static int test_socket_create_bind_listen(void) {
   printf("Test: Socket create/bind/listen\n");
 
   const char *error = NULL;
 
-  // Create socket
   ak_socket_fd_t fd = ak_tcp_socket_create(&error);
   AK24_TEST_ASSERT_NEQ((int)fd, (int)AK_INVALID_SOCKET);
 
-  // Bind
   AK24_TEST_ASSERT_EQ(ak_tcp_socket_bind(fd, "127.0.0.1", TEST_PORT, &error),
                       0);
 
-  // Listen
   AK24_TEST_ASSERT_EQ(ak_tcp_socket_listen(fd, 10, &error), 0);
 
-  // Cleanup
   ak_tcp_socket_close(fd);
 
   printf("  PASSED\n");
@@ -420,7 +367,6 @@ static int test_server_create(void) {
 
   const char *error = NULL;
 
-  // Create handler lambda
   ak_lambda_t *handler = ak_lambda_new(on_handle_echo, NULL, NULL);
   AK24_TEST_ASSERT_NOT_NULL(handler);
 
@@ -461,16 +407,12 @@ static int test_server_start_stop(void) {
   ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
   AK24_TEST_ASSERT_NOT_NULL(server);
 
-  // Start
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
 
-  // Give it a moment to start
-  usleep(50000); // 50ms
+  usleep(50000);
 
-  // Stop
   ak_tcp_server_stop(server);
 
-  // Free
   ak_tcp_server_free(server);
 
   printf("  PASSED\n");
@@ -482,7 +424,6 @@ static int test_server_echo(void) {
 
   const char *error = NULL;
 
-  // Reset counters
   connections_accepted = 0;
   connections_handled = 0;
   connections_disconnected = 0;
@@ -502,27 +443,21 @@ static int test_server_echo(void) {
 
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
 
-  // Give server time to start
-  usleep(50000); // 50ms
+  usleep(50000);
 
-  // Connect and send
   char response[256] = {0};
   int result = test_client_connect_and_send(TEST_PORT + 3, "Hello\n", response,
                                             sizeof(response));
   AK24_TEST_ASSERT_EQ(result, 0);
 
-  // Give server time to process
-  usleep(100000); // 100ms
+  usleep(100000);
 
-  // Check response
   printf("  Response: '%s'\n", response);
   AK24_TEST_ASSERT_STR_EQ(response, "Hello\n");
 
-  // Check counters
   AK24_TEST_ASSERT_EQ(connections_accepted, 1);
   AK24_TEST_ASSERT_EQ(connections_handled, 1);
 
-  // Stop and free
   ak_tcp_server_stop(server);
   ak_tcp_server_free(server);
 
@@ -545,7 +480,6 @@ static int test_connection_rejection(void) {
       .on_disconnect = NULL,
   };
 
-  // Reset counter
   connections_handled = 0;
 
   ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
@@ -553,9 +487,8 @@ static int test_connection_rejection(void) {
 
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
 
-  usleep(50000); // 50ms
+  usleep(50000);
 
-  // Try to connect (should be rejected)
   ak_socket_fd_t sock = ak_tcp_socket_create(&error);
   AK24_TEST_ASSERT_NEQ((int)sock, (int)AK_INVALID_SOCKET);
 
@@ -565,15 +498,12 @@ static int test_connection_rejection(void) {
   server_addr.sin_port = htons(TEST_PORT + 4);
   server_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-  // Connection should succeed (TCP handshake)
   int conn_result =
       connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
   AK24_TEST_ASSERT_EQ(conn_result, 0);
 
-  // But server should close it immediately
-  usleep(100000); // 100ms
+  usleep(100000);
 
-  // Handler should NOT have been called
   AK24_TEST_ASSERT_EQ(connections_handled, 0);
 
   ak_tcp_socket_close(sock);
@@ -587,7 +517,6 @@ static int test_connection_rejection(void) {
 static int test_buffer_operations(void) {
   printf("Test: Buffer operations (context)\n");
 
-  // Create a real socket for testing
   const char *error = NULL;
   ak_socket_fd_t sock = ak_tcp_socket_create(&error);
   AK24_TEST_ASSERT_NEQ((int)sock, (int)AK_INVALID_SOCKET);
@@ -595,14 +524,12 @@ static int test_buffer_operations(void) {
   ak_tcp_ctx_t *ctx = ak_tcp_ctx_new(sock, "127.0.0.1", 12345, 0, 0);
   AK24_TEST_ASSERT_NOT_NULL(ctx);
 
-  // Test metadata
   int value = 42;
   ak_tcp_set_meta(ctx, "test_key", &value);
   int *retrieved = (int *)ak_tcp_get_meta(ctx, "test_key");
   AK24_TEST_ASSERT_NOT_NULL(retrieved);
   AK24_TEST_ASSERT_EQ(*retrieved, 42);
 
-  // Test alive state - socket is valid so should report alive
   AK24_TEST_ASSERT(ak_tcp_is_alive(ctx));
   ak_tcp_close(ctx);
   AK24_TEST_ASSERT(!ak_tcp_is_alive(ctx));
@@ -613,15 +540,6 @@ static int test_buffer_operations(void) {
   AK24_TEST_PASS();
 }
 
-// ============================================================================
-// COMPREHENSIVE DATA VALIDATION TESTS
-// ============================================================================
-
-/**
- * Test: Small data echo with byte-for-byte validation
- * - Sends 64 bytes of sequential data
- * - Validates every byte on return
- */
 static int test_data_validation_small(void) {
   printf("Test: Data validation - small payload (%d bytes)\n", SMALL_DATA_SIZE);
 
@@ -629,7 +547,6 @@ static int test_data_validation_small(void) {
   const char *error = NULL;
   const uint16_t port = TEST_PORT + 10;
 
-  // Create server
   ak_tcp_server_config_t cfg = {
       .bind_addr = "127.0.0.1",
       .port = port,
@@ -645,33 +562,27 @@ static int test_data_validation_small(void) {
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
   usleep(50000);
 
-  // Prepare test data
   uint8_t send_data[SMALL_DATA_SIZE];
-  uint8_t recv_data[SMALL_DATA_SIZE + 4] = {0}; // +4 for length prefix
+  uint8_t recv_data[SMALL_DATA_SIZE + 4] = {0};
   generate_sequential_data(send_data, SMALL_DATA_SIZE);
 
-  // Connect and send
   test_client_t client = {0};
   AK24_TEST_ASSERT_EQ(test_client_connect(&client, port), 0);
 
-  // Send length-prefixed data
   uint8_t header[4] = {0, 0, 0, SMALL_DATA_SIZE};
   AK24_TEST_ASSERT_EQ(test_client_send_all(&client, header, 4), 4);
   AK24_TEST_ASSERT_EQ(test_client_send_all(&client, send_data, SMALL_DATA_SIZE),
                       SMALL_DATA_SIZE);
 
-  // Receive response
   ssize_t received =
       test_client_recv_all(&client, recv_data, 4 + SMALL_DATA_SIZE);
   AK24_TEST_ASSERT_EQ(received, 4 + SMALL_DATA_SIZE);
 
-  // Validate length prefix
   uint32_t recv_len = ((uint32_t)recv_data[0] << 24) |
                       ((uint32_t)recv_data[1] << 16) |
                       ((uint32_t)recv_data[2] << 8) | (uint32_t)recv_data[3];
   AK24_TEST_ASSERT_EQ(recv_len, SMALL_DATA_SIZE);
 
-  // Validate payload byte-for-byte
   int errors =
       validate_data(send_data, recv_data + 4, SMALL_DATA_SIZE, "small_data");
   AK24_TEST_ASSERT_EQ(errors, 0);
@@ -687,11 +598,6 @@ static int test_data_validation_small(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Medium data echo with byte-for-byte validation
- * - Sends 1024 bytes of random data
- * - Validates every byte on return
- */
 static int test_data_validation_medium(void) {
   printf("Test: Data validation - medium payload (%d bytes)\n",
          MEDIUM_DATA_SIZE);
@@ -715,7 +621,6 @@ static int test_data_validation_medium(void) {
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
   usleep(50000);
 
-  // Prepare test data with random pattern
   uint8_t *send_data = AK24_ALLOC(MEDIUM_DATA_SIZE);
   uint8_t *recv_data = AK24_ALLOC(MEDIUM_DATA_SIZE + 4);
   AK24_TEST_ASSERT_NOT_NULL(send_data);
@@ -724,7 +629,6 @@ static int test_data_validation_medium(void) {
   generate_random_data(send_data, MEDIUM_DATA_SIZE, 12345);
   memset(recv_data, 0, MEDIUM_DATA_SIZE + 4);
 
-  // Connect and send
   test_client_t client = {0};
   AK24_TEST_ASSERT_EQ(test_client_connect(&client, port), 0);
 
@@ -736,12 +640,10 @@ static int test_data_validation_medium(void) {
       test_client_send_all(&client, send_data, MEDIUM_DATA_SIZE),
       MEDIUM_DATA_SIZE);
 
-  // Receive response
   ssize_t received =
       test_client_recv_all(&client, recv_data, 4 + MEDIUM_DATA_SIZE);
   AK24_TEST_ASSERT_EQ(received, 4 + MEDIUM_DATA_SIZE);
 
-  // Validate
   int errors =
       validate_data(send_data, recv_data + 4, MEDIUM_DATA_SIZE, "medium_data");
   AK24_TEST_ASSERT_EQ(errors, 0);
@@ -757,11 +659,6 @@ static int test_data_validation_medium(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Large data echo with byte-for-byte validation
- * - Sends 8192 bytes of data including NULL bytes and 0xFF
- * - Validates every byte on return
- */
 static int test_data_validation_large(void) {
   printf("Test: Data validation - large payload (%d bytes)\n", LARGE_DATA_SIZE);
 
@@ -784,7 +681,6 @@ static int test_data_validation_large(void) {
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
   usleep(50000);
 
-  // Prepare test data with binary pattern (includes 0x00 and 0xFF)
   uint8_t *send_data = AK24_ALLOC(LARGE_DATA_SIZE);
   uint8_t *recv_data = AK24_ALLOC(LARGE_DATA_SIZE + 4);
   AK24_TEST_ASSERT_NOT_NULL(send_data);
@@ -793,7 +689,6 @@ static int test_data_validation_large(void) {
   generate_binary_pattern(send_data, LARGE_DATA_SIZE);
   memset(recv_data, 0, LARGE_DATA_SIZE + 4);
 
-  // Connect and send
   test_client_t client = {0};
   AK24_TEST_ASSERT_EQ(test_client_connect(&client, port), 0);
 
@@ -804,12 +699,10 @@ static int test_data_validation_large(void) {
   AK24_TEST_ASSERT_EQ(test_client_send_all(&client, send_data, LARGE_DATA_SIZE),
                       LARGE_DATA_SIZE);
 
-  // Receive response
   ssize_t received =
       test_client_recv_all(&client, recv_data, 4 + LARGE_DATA_SIZE);
   AK24_TEST_ASSERT_EQ(received, 4 + LARGE_DATA_SIZE);
 
-  // Validate
   int errors =
       validate_data(send_data, recv_data + 4, LARGE_DATA_SIZE, "large_data");
   AK24_TEST_ASSERT_EQ(errors, 0);
@@ -825,11 +718,6 @@ static int test_data_validation_large(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Multiple sequential messages with validation
- * - Sends 5 different messages on same connection
- * - Validates each response
- */
 static int test_data_validation_multi_message(void) {
   printf("Test: Data validation - multiple messages on single connection\n");
 
@@ -855,7 +743,6 @@ static int test_data_validation_multi_message(void) {
   test_client_t client = {0};
   AK24_TEST_ASSERT_EQ(test_client_connect(&client, port), 0);
 
-  // Test messages with different content
   const char *test_messages[] = {
       "Message 1: Hello World!\n",
       "Message 2: Testing TCP data validation.\n",
@@ -872,16 +759,13 @@ static int test_data_validation_multi_message(void) {
     size_t msg_len = strlen(msg);
     char recv_buf[256] = {0};
 
-    // Send message
     ssize_t sent = test_client_send_all(&client, (const uint8_t *)msg, msg_len);
     AK24_TEST_ASSERT_EQ(sent, (ssize_t)msg_len);
 
-    // Receive response
     ssize_t received =
         test_client_recv_all(&client, (uint8_t *)recv_buf, msg_len);
     AK24_TEST_ASSERT_EQ(received, (ssize_t)msg_len);
 
-    // Validate
     int errors = validate_data((const uint8_t *)msg, (const uint8_t *)recv_buf,
                                msg_len, "multi_msg");
     total_errors += errors;
@@ -903,11 +787,6 @@ static int test_data_validation_multi_message(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Binary data with NULL bytes
- * - Specifically tests that 0x00 bytes are handled correctly
- * - Important for protocols that aren't string-based
- */
 static int test_data_validation_null_bytes(void) {
   printf("Test: Data validation - binary with NULL bytes\n");
 
@@ -930,7 +809,6 @@ static int test_data_validation_null_bytes(void) {
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
   usleep(50000);
 
-  // Create data with embedded NULL bytes
   uint8_t send_data[32] = {0x00, 0x01, 0x02, 0x00, 0x04, 0x05, 0x00, 0x07,
                            0xFF, 0xFE, 0x00, 0xFC, 0xFB, 0x00, 0xF9, 0xF8,
                            0x00, 0x00, 0x00, 0x00, 0xAA, 0xBB, 0xCC, 0xDD,
@@ -947,11 +825,9 @@ static int test_data_validation_null_bytes(void) {
   ssize_t received = test_client_recv_all(&client, recv_data, 36);
   AK24_TEST_ASSERT_EQ(received, 36);
 
-  // Validate - especially important for NULL bytes
   int errors = validate_data(send_data, recv_data + 4, 32, "null_bytes");
   AK24_TEST_ASSERT_EQ(errors, 0);
 
-  // Count NULL bytes to verify they came through
   int null_count_sent = 0, null_count_recv = 0;
   for (int i = 0; i < 32; i++) {
     if (send_data[i] == 0x00)
@@ -972,11 +848,6 @@ static int test_data_validation_null_bytes(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: All byte values (0x00-0xFF)
- * - Sends every possible byte value
- * - Validates each byte comes back correctly
- */
 static int test_data_validation_all_bytes(void) {
   printf("Test: Data validation - all 256 byte values\n");
 
@@ -999,7 +870,6 @@ static int test_data_validation_all_bytes(void) {
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
   usleep(50000);
 
-  // Create data with all 256 byte values
   uint8_t send_data[256];
   uint8_t recv_data[260] = {0};
   for (int i = 0; i < 256; i++) {
@@ -1009,23 +879,21 @@ static int test_data_validation_all_bytes(void) {
   test_client_t client = {0};
   AK24_TEST_ASSERT_EQ(test_client_connect(&client, port), 0);
 
-  uint8_t header[4] = {0, 0, 1, 0}; // 256 in big-endian
+  uint8_t header[4] = {0, 0, 1, 0};
   AK24_TEST_ASSERT_EQ(test_client_send_all(&client, header, 4), 4);
   AK24_TEST_ASSERT_EQ(test_client_send_all(&client, send_data, 256), 256);
 
   ssize_t received = test_client_recv_all(&client, recv_data, 260);
   AK24_TEST_ASSERT_EQ(received, 260);
 
-  // Validate all byte values came through
   int errors = validate_data(send_data, recv_data + 4, 256, "all_bytes");
   AK24_TEST_ASSERT_EQ(errors, 0);
 
-  // Verify specific edge cases
-  AK24_TEST_ASSERT_EQ(recv_data[4], 0x00);      // First byte (NULL)
-  AK24_TEST_ASSERT_EQ(recv_data[4 + 10], 0x0A); // Newline
-  AK24_TEST_ASSERT_EQ(recv_data[4 + 13], 0x0D); // Carriage return
-  AK24_TEST_ASSERT_EQ(recv_data[4 + 127], 127); // DEL
-  AK24_TEST_ASSERT_EQ(recv_data[4 + 255], 255); // 0xFF
+  AK24_TEST_ASSERT_EQ(recv_data[4], 0x00);
+  AK24_TEST_ASSERT_EQ(recv_data[4 + 10], 0x0A);
+  AK24_TEST_ASSERT_EQ(recv_data[4 + 13], 0x0D);
+  AK24_TEST_ASSERT_EQ(recv_data[4 + 127], 127);
+  AK24_TEST_ASSERT_EQ(recv_data[4 + 255], 255);
 
   test_client_disconnect(&client);
   usleep(50000);
@@ -1037,10 +905,6 @@ static int test_data_validation_all_bytes(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Data integrity statistics
- * - Verifies server-side byte counts match client-side
- */
 static int test_data_validation_byte_counts(void) {
   printf("Test: Data validation - byte count verification\n");
 
@@ -1078,31 +942,22 @@ static int test_data_validation_byte_counts(void) {
   AK24_TEST_ASSERT_EQ(received, 132);
 
   test_client_disconnect(&client);
-  usleep(100000); // Wait for server to update counters
+  usleep(100000);
   ak_tcp_server_stop(server);
   ak_tcp_server_free(server);
 
-  // Verify server-side byte counts
   printf("  Server received: %d bytes\n", total_bytes_received);
   printf("  Server sent: %d bytes\n", total_bytes_sent);
-  AK24_TEST_ASSERT_EQ(total_bytes_received, 132); // 4 header + 128 data
-  AK24_TEST_ASSERT_EQ(total_bytes_sent, 132);     // 4 header + 128 data
+  AK24_TEST_ASSERT_EQ(total_bytes_received, 132);
+  AK24_TEST_ASSERT_EQ(total_bytes_sent, 132);
 
   printf("  PASSED\n");
   AK24_TEST_PASS();
 }
 
-// ============================================================================
-// FEATURE TESTS: Timeouts, Keepalive, Graceful Shutdown, Connection Limits
-// ============================================================================
-
-/**
- * Test: Error code string conversion
- */
 static int test_error_codes(void) {
   printf("Test: Error code string conversion\n");
 
-  // Verify all error codes have valid strings
   AK24_TEST_ASSERT_STR_EQ(ak_tcp_error_string(AK_TCP_OK), "Success");
   AK24_TEST_ASSERT_STR_EQ(ak_tcp_error_string(AK_TCP_ERR_TIMEOUT),
                           "Operation timed out");
@@ -1127,7 +982,6 @@ static int test_error_codes(void) {
   AK24_TEST_ASSERT_STR_EQ(ak_tcp_error_string(AK_TCP_ERR_RATE_LIMIT),
                           "Rate limit exceeded");
 
-  // Unknown error
   const char *unknown = ak_tcp_error_string((ak_tcp_error_t)999);
   AK24_TEST_ASSERT_NOT_NULL(unknown);
 
@@ -1136,20 +990,16 @@ static int test_error_codes(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Default server config
- */
 static int test_default_config(void) {
   printf("Test: Default server configuration\n");
 
   ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
 
-  // Verify defaults
   AK24_TEST_ASSERT_EQ(cfg.thread_pool_size, 4);
   AK24_TEST_ASSERT_EQ(cfg.backlog, 128);
-  AK24_TEST_ASSERT_EQ(cfg.max_connections, 0);         // Unlimited
-  AK24_TEST_ASSERT_EQ(cfg.default_recv_timeout_ms, 0); // No timeout
-  AK24_TEST_ASSERT_EQ(cfg.default_send_timeout_ms, 0); // No timeout
+  AK24_TEST_ASSERT_EQ(cfg.max_connections, 0);
+  AK24_TEST_ASSERT_EQ(cfg.default_recv_timeout_ms, 0);
+  AK24_TEST_ASSERT_EQ(cfg.default_send_timeout_ms, 0);
   AK24_TEST_ASSERT(!cfg.enable_keepalive);
   AK24_TEST_ASSERT_EQ(cfg.keepalive_idle_sec, 60);
   AK24_TEST_ASSERT_EQ(cfg.keepalive_interval_sec, 10);
@@ -1162,34 +1012,26 @@ static int test_default_config(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Set and get socket timeouts
- */
 static int test_set_timeout(void) {
   printf("Test: Socket timeout set/get\n");
 
-  // Create a context with invalid socket - timeout set should return CLOSED
   ak_tcp_ctx_t *ctx =
       ak_tcp_ctx_new(AK_INVALID_SOCKET, "127.0.0.1", 12345, 0, 0);
   AK24_TEST_ASSERT_NOT_NULL(ctx);
 
-  // Set timeouts on invalid socket - should fail
   ak_tcp_error_t err = ak_tcp_set_timeout(ctx, 5000, 3000);
   AK24_TEST_ASSERT_EQ(err, AK_TCP_ERR_CLOSED);
 
-  // Get timeouts should still work (returns stored values)
   uint32_t recv_timeout = 0, send_timeout = 0;
   err = ak_tcp_get_timeout(ctx, &recv_timeout, &send_timeout);
   AK24_TEST_ASSERT_EQ(err, AK_TCP_OK);
-  // Values are 0 because set failed
+
   AK24_TEST_ASSERT_EQ(recv_timeout, 0);
   AK24_TEST_ASSERT_EQ(send_timeout, 0);
 
-  // Test NULL outputs are handled
   err = ak_tcp_get_timeout(ctx, NULL, NULL);
   AK24_TEST_ASSERT_EQ(err, AK_TCP_OK);
 
-  // Test invalid context
   err = ak_tcp_set_timeout(NULL, 1000, 1000);
   AK24_TEST_ASSERT_EQ(err, AK_TCP_ERR_INVALID);
 
@@ -1203,11 +1045,6 @@ static int test_set_timeout(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Receive timeout fires correctly
- * - Sets a short recv timeout
- * - Server sends nothing, client should timeout
- */
 static int test_recv_timeout(void) {
   printf("Test: Receive timeout behavior\n");
 
@@ -1226,21 +1063,17 @@ static int test_recv_timeout(void) {
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
   usleep(50000);
 
-  // Connect
   test_client_t client = {0};
   AK24_TEST_ASSERT_EQ(test_client_connect(&client, port), 0);
 
-  // Set a short timeout (200ms)
   struct timeval tv;
   tv.tv_sec = 0;
-  tv.tv_usec = 200000; // 200ms
+  tv.tv_usec = 200000;
   setsockopt(client.sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-  // Try to receive - should timeout
   uint8_t buf[64];
   ssize_t received = recv(client.sock, buf, sizeof(buf), 0);
 
-  // Should return -1 with EAGAIN/EWOULDBLOCK or 0
   printf("  Recv returned: %zd (expected timeout/error)\n", received);
   AK24_TEST_ASSERT(received <= 0);
 
@@ -1252,9 +1085,6 @@ static int test_recv_timeout(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Server-level default timeout configuration
- */
 static int test_server_default_timeout(void) {
   printf("Test: Server-level default timeout configuration\n");
 
@@ -1274,7 +1104,6 @@ static int test_server_default_timeout(void) {
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
   usleep(50000);
 
-  // Quick echo test to verify server still works with timeouts configured
   char response[64] = {0};
   int result =
       test_client_connect_and_send(port, "test\n", response, sizeof(response));
@@ -1290,31 +1119,23 @@ static int test_server_default_timeout(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Keepalive configuration
- */
 static int test_keepalive_config(void) {
   printf("Test: TCP keepalive configuration\n");
 
-  // Create a real socket for testing keepalive options
   const char *error = NULL;
   ak_socket_fd_t sock = ak_tcp_socket_create(&error);
   AK24_TEST_ASSERT_NEQ((int)sock, (int)AK_INVALID_SOCKET);
 
-  // Create context with real socket
   ak_tcp_ctx_t *ctx = ak_tcp_ctx_new(sock, "127.0.0.1", 12345, 0, 0);
   AK24_TEST_ASSERT_NOT_NULL(ctx);
 
-  // Set keepalive
   ak_tcp_error_t err = ak_tcp_set_keepalive(ctx, 30, 5, 3);
-  // Note: This may fail if socket isn't connected, but API should handle it
+
   printf("  Set keepalive returned: %s\n", ak_tcp_error_string(err));
 
-  // Test NULL context
   err = ak_tcp_set_keepalive(NULL, 30, 5, 3);
   AK24_TEST_ASSERT_EQ(err, AK_TCP_ERR_INVALID);
 
-  // Test disable keepalive (idle_sec = 0)
   err = ak_tcp_set_keepalive(ctx, 0, 0, 0);
   printf("  Disable keepalive returned: %s\n", ak_tcp_error_string(err));
 
@@ -1325,9 +1146,6 @@ static int test_keepalive_config(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Server with keepalive enabled
- */
 static int test_server_keepalive(void) {
   printf("Test: Server with keepalive enabled\n");
 
@@ -1349,7 +1167,6 @@ static int test_server_keepalive(void) {
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
   usleep(50000);
 
-  // Quick echo test to verify server works with keepalive
   char response[64] = {0};
   int result = test_client_connect_and_send(port, "keepalive-test\n", response,
                                             sizeof(response));
@@ -1365,15 +1182,11 @@ static int test_server_keepalive(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Graceful shutdown vs close
- */
 static int test_graceful_shutdown(void) {
   printf("Test: Graceful shutdown\n");
 
   const char *error = NULL;
 
-  // Create a real socket for testing
   ak_socket_fd_t sock = ak_tcp_socket_create(&error);
   AK24_TEST_ASSERT_NEQ((int)sock, (int)AK_INVALID_SOCKET);
 
@@ -1381,13 +1194,11 @@ static int test_graceful_shutdown(void) {
   AK24_TEST_ASSERT_NOT_NULL(ctx);
   AK24_TEST_ASSERT(ak_tcp_is_alive(ctx));
 
-  // Graceful shutdown
   ak_tcp_shutdown(ctx);
   AK24_TEST_ASSERT(!ak_tcp_is_alive(ctx));
 
   ak_tcp_ctx_free(ctx);
 
-  // Test abort (alias for close) with another socket
   sock = ak_tcp_socket_create(&error);
   AK24_TEST_ASSERT_NEQ((int)sock, (int)AK_INVALID_SOCKET);
 
@@ -1405,9 +1216,6 @@ static int test_graceful_shutdown(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Connection count tracking
- */
 static int test_connection_count(void) {
   printf("Test: Connection count tracking\n");
 
@@ -1426,27 +1234,22 @@ static int test_connection_count(void) {
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
   usleep(50000);
 
-  // Initial count should be 0
   size_t count = ak_tcp_server_connection_count(server);
   printf("  Initial connection count: %zu\n", count);
   AK24_TEST_ASSERT_EQ(count, 0);
 
-  // Connect a client
   test_client_t client = {0};
   AK24_TEST_ASSERT_EQ(test_client_connect(&client, port), 0);
 
-  // Send data to trigger handler
   test_client_send_all(&client, (const uint8_t *)"hello\n", 6);
-  usleep(100000); // Wait for server to process
+  usleep(100000);
 
-  // Connection may or may not be counted depending on timing
   count = ak_tcp_server_connection_count(server);
   printf("  Connection count after connect: %zu\n", count);
 
   test_client_disconnect(&client);
   usleep(100000);
 
-  // After disconnect, count should eventually be 0
   count = ak_tcp_server_connection_count(server);
   printf("  Connection count after disconnect: %zu\n", count);
 
@@ -1458,9 +1261,6 @@ static int test_connection_count(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Connection limit enforcement
- */
 static int test_connection_limit(void) {
   printf("Test: Connection limit enforcement\n");
 
@@ -1471,7 +1271,7 @@ static int test_connection_limit(void) {
   ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
   cfg.bind_addr = "127.0.0.1";
   cfg.port = port;
-  cfg.max_connections = 2; // Only allow 2 concurrent connections
+  cfg.max_connections = 2;
   cfg.on_connect = ak_lambda_new(on_connect_accept_all, NULL, NULL);
   cfg.on_handle = ak_lambda_new(on_handle_multi_echo, NULL, NULL);
 
@@ -1480,7 +1280,6 @@ static int test_connection_limit(void) {
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
   usleep(50000);
 
-  // Connect first two clients
   test_client_t client1 = {0}, client2 = {0}, client3 = {0};
   AK24_TEST_ASSERT_EQ(test_client_connect(&client1, port), 0);
   test_client_send_all(&client1, (const uint8_t *)"msg1\n", 5);
@@ -1493,21 +1292,18 @@ static int test_connection_limit(void) {
   size_t count = ak_tcp_server_connection_count(server);
   printf("  Active connections after 2 clients: %zu\n", count);
 
-  // Try to connect a third client - TCP connection may succeed but server
-  // should reject
   int conn_result = test_client_connect(&client3, port);
   printf("  Third client connect result: %d\n", conn_result);
 
   if (conn_result == 0) {
-    // Connection established, but server may close it immediately
+
     usleep(100000);
-    // Try to send - should fail if rejected
+
     ssize_t sent = send(client3.sock, "test\n", 5, 0);
     printf("  Third client send result: %zd\n", sent);
     test_client_disconnect(&client3);
   }
 
-  // Cleanup
   test_client_disconnect(&client1);
   test_client_disconnect(&client2);
   usleep(100000);
@@ -1520,9 +1316,6 @@ static int test_connection_limit(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Custom buffer sizes
- */
 static int test_custom_buffer_sizes(void) {
   printf("Test: Custom buffer sizes\n");
 
@@ -1542,7 +1335,6 @@ static int test_custom_buffer_sizes(void) {
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
   usleep(50000);
 
-  // Quick echo test
   char response[64] = {0};
   int result = test_client_connect_and_send(port, "buffer-test\n", response,
                                             sizeof(response));
@@ -1558,9 +1350,6 @@ static int test_custom_buffer_sizes(void) {
   AK24_TEST_PASS();
 }
 
-/**
- * Test: Extended error-code API (ak_tcp_recv_ex, ak_tcp_send_ex)
- */
 static int test_extended_error_api(void) {
   printf("Test: Extended error-code API\n");
 
@@ -1579,7 +1368,6 @@ static int test_extended_error_api(void) {
   AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
   usleep(50000);
 
-  // Test with binary echo
   test_client_t client = {0};
   AK24_TEST_ASSERT_EQ(test_client_connect(&client, port), 0);
 
@@ -1593,7 +1381,6 @@ static int test_extended_error_api(void) {
   uint8_t recv_buf[68] = {0};
   test_client_recv_all(&client, recv_buf, 68);
 
-  // Validate
   int errors = validate_data(send_data, recv_buf + 4, 64, "extended_api");
   AK24_TEST_ASSERT_EQ(errors, 0);
 
@@ -1607,13 +1394,9 @@ static int test_extended_error_api(void) {
   AK24_TEST_PASS();
 }
 
-// ============================================================================
-// Main
-// ============================================================================
-
 int main(void) {
   ak_kernel_init("ak24-test");
-  ak_log_set_level(AK24_LOG_LEVEL_WARN); // Reduce noise during tests
+  ak_log_set_level(AK24_LOG_LEVEL_WARN);
 
   printf("\n");
   printf("============================================================\n");

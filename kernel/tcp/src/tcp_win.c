@@ -1,21 +1,14 @@
-/**
- * @file tcp_win.c
- * @brief Windows socket operations for TCP module
- *
- * Implements platform-specific socket functions for Windows using Winsock2.
- */
 
 #ifdef AK24_PLATFORM_WINDOWS
 
 #include "tcp_internal.h"
-#include <mstcpip.h> // For SIO_KEEPALIVE_VALS and tcp_keepalive
+#include <mstcpip.h>
 #include <stdio.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
 #pragma comment(lib, "ws2_32.lib")
 
-// Track WSA initialization
 static int wsa_initialized = 0;
 static WSADATA wsa_data;
 
@@ -61,7 +54,7 @@ ak_socket_fd_t ak_tcp_socket_create(const char **error) {
 }
 
 ak_socket_fd_t ak_tcp_socket_create_for_addr(const char *addr,
-                                              const char **error) {
+                                             const char **error) {
   int family = ak_tcp_detect_addr_family(addr);
   SOCKET sock = socket(family, SOCK_STREAM, IPPROTO_TCP);
   if (sock == INVALID_SOCKET) {
@@ -281,7 +274,6 @@ int ak_tcp_socket_set_timeout(ak_socket_fd_t fd, uint32_t recv_timeout_ms,
                               uint32_t send_timeout_ms, const char **error) {
   DWORD timeout;
 
-  // Set receive timeout
   timeout = (DWORD)recv_timeout_ms;
   if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout,
                  sizeof(timeout)) == SOCKET_ERROR) {
@@ -291,7 +283,6 @@ int ak_tcp_socket_set_timeout(ak_socket_fd_t fd, uint32_t recv_timeout_ms,
     return -1;
   }
 
-  // Set send timeout
   timeout = (DWORD)send_timeout_ms;
   if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeout,
                  sizeof(timeout)) == SOCKET_ERROR) {
@@ -338,7 +329,7 @@ int ak_tcp_socket_get_timeout(ak_socket_fd_t fd, uint32_t *recv_timeout_ms,
 int ak_tcp_socket_set_keepalive(ak_socket_fd_t fd, int idle_sec,
                                 int interval_sec, int probe_count,
                                 const char **error) {
-  (void)probe_count; // Windows doesn't support setting probe count directly
+  (void)probe_count;
 
   BOOL optval = (idle_sec > 0) ? TRUE : FALSE;
   if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const char *)&optval,
@@ -353,11 +344,10 @@ int ak_tcp_socket_set_keepalive(ak_socket_fd_t fd, int idle_sec,
     return 0;
   }
 
-  // Use SIO_KEEPALIVE_VALS ioctl for detailed keepalive settings
   struct tcp_keepalive ka;
   ka.onoff = 1;
-  ka.keepalivetime = idle_sec * 1000;         // milliseconds
-  ka.keepaliveinterval = interval_sec * 1000; // milliseconds
+  ka.keepalivetime = idle_sec * 1000;
+  ka.keepaliveinterval = interval_sec * 1000;
 
   DWORD bytes_returned;
   if (WSAIoctl(fd, SIO_KEEPALIVE_VALS, &ka, sizeof(ka), NULL, 0,
@@ -426,9 +416,9 @@ int ak_tcp_socket_poll_read(ak_socket_fd_t fd, int timeout_ms) {
     return -1;
   }
   if (ret == 0) {
-    return 0; // Timeout
+    return 0;
   }
-  return 1; // Ready
+  return 1;
 }
 
 void ak_tcp_socket_shutdown(ak_socket_fd_t fd) {
@@ -442,36 +432,34 @@ bool ak_tcp_socket_peer_closed(ak_socket_fd_t fd) {
     return true;
   }
 
-  // Use select with 0 timeout to check socket state
   fd_set read_fds;
   FD_ZERO(&read_fds);
   FD_SET(fd, &read_fds);
 
-  struct timeval tv = {0, 0}; // 0 timeout = poll
+  struct timeval tv = {0, 0};
   int ret = select(0, &read_fds, NULL, NULL, &tv);
 
   if (ret < 0) {
-    // Error - treat as closed
+
     return true;
   }
 
   if (ret == 0) {
-    // No events - connection still alive
+
     return false;
   }
 
-  // There's data to read - peek to check if it's EOF
   if (FD_ISSET(fd, &read_fds)) {
     char buf;
     int n = recv(fd, &buf, 1, MSG_PEEK);
     if (n == 0) {
-      // EOF - peer closed
+
       return true;
     }
     if (n == SOCKET_ERROR) {
       int err = WSAGetLastError();
       if (err != WSAEWOULDBLOCK) {
-        // Error - treat as closed
+
         return true;
       }
     }
@@ -503,4 +491,4 @@ ak_tcp_error_t ak_tcp_map_error(int platform_errno) {
   }
 }
 
-#endif // AK24_PLATFORM_WINDOWS
+#endif

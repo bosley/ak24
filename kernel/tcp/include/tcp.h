@@ -297,15 +297,15 @@ void ak_tcp_abort(ak_tcp_ctx_t *ctx);
  * @brief Server statistics
  */
 typedef struct {
-  size_t connections_accepted;           /**< Total connections accepted */
-  size_t connections_rejected_limit;     /**< Rejected due to connection limit
-                                          */
-  size_t connections_rejected_queue;     /**< Rejected due to queue full */
-  size_t connections_rejected_rate;      /**< Rejected due to rate limit */
-  size_t connections_rejected_ip_limit;  /**< Rejected due to per-IP limit */
-  size_t active_connections;             /**< Current active connections */
-  size_t total_bytes_received;           /**< Total bytes received */
-  size_t total_bytes_sent;               /**< Total bytes sent */
+  size_t connections_accepted;          /**< Total connections accepted */
+  size_t connections_rejected_limit;    /**< Rejected due to connection limit
+                                         */
+  size_t connections_rejected_queue;    /**< Rejected due to queue full */
+  size_t connections_rejected_rate;     /**< Rejected due to rate limit */
+  size_t connections_rejected_ip_limit; /**< Rejected due to per-IP limit */
+  size_t active_connections;            /**< Current active connections */
+  size_t total_bytes_received;          /**< Total bytes received */
+  size_t total_bytes_sent;              /**< Total bytes sent */
 } ak_tcp_server_stats_t;
 
 /**
@@ -323,7 +323,8 @@ size_t ak_tcp_server_connection_count(ak_tcp_server_t *server);
  * @param stats Output for statistics (caller provides storage)
  * @return 0 on success, -1 on failure
  */
-int ak_tcp_server_get_stats(ak_tcp_server_t *server, ak_tcp_server_stats_t *stats);
+int ak_tcp_server_get_stats(ak_tcp_server_t *server,
+                            ak_tcp_server_stats_t *stats);
 
 /**
  * @brief Check if server is draining (graceful shutdown in progress)

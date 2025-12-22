@@ -1,10 +1,3 @@
-/**
- * @file tcp_posix.c
- * @brief POSIX socket operations for TCP module
- *
- * Implements platform-specific socket functions for POSIX systems
- * (Linux, macOS, BSD).
- */
 
 #ifndef AK24_PLATFORM_WINDOWS
 
@@ -22,7 +15,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-// Static flag to track SIGPIPE handling
 static int sigpipe_handled = 0;
 
 void ak_tcp_platform_init(void) {
@@ -32,8 +24,7 @@ void ak_tcp_platform_init(void) {
   }
 }
 
-void ak_tcp_platform_deinit(void) {
-}
+void ak_tcp_platform_deinit(void) {}
 
 static int ak_tcp_detect_addr_family(const char *addr) {
   if (addr == NULL || strcmp(addr, "0.0.0.0") == 0) {
@@ -53,7 +44,7 @@ ak_socket_fd_t ak_tcp_socket_create(const char **error) {
 }
 
 ak_socket_fd_t ak_tcp_socket_create_for_addr(const char *addr,
-                                              const char **error) {
+                                             const char **error) {
   int family = ak_tcp_detect_addr_family(addr);
   int fd = socket(family, SOCK_STREAM, 0);
   if (fd < 0) {
@@ -282,7 +273,6 @@ int ak_tcp_socket_set_timeout(ak_socket_fd_t fd, uint32_t recv_timeout_ms,
                               uint32_t send_timeout_ms, const char **error) {
   struct timeval tv;
 
-  // Set receive timeout
   if (recv_timeout_ms > 0) {
     tv.tv_sec = recv_timeout_ms / 1000;
     tv.tv_usec = (recv_timeout_ms % 1000) * 1000;
@@ -297,7 +287,6 @@ int ak_tcp_socket_set_timeout(ak_socket_fd_t fd, uint32_t recv_timeout_ms,
     return -1;
   }
 
-  // Set send timeout
   if (send_timeout_ms > 0) {
     tv.tv_sec = send_timeout_ms / 1000;
     tv.tv_usec = (send_timeout_ms % 1000) * 1000;
@@ -349,7 +338,6 @@ int ak_tcp_socket_set_keepalive(ak_socket_fd_t fd, int idle_sec,
                                 const char **error) {
   int optval;
 
-  // Enable or disable keepalive
   optval = (idle_sec > 0) ? 1 : 0;
   if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval)) < 0) {
     if (error) {
@@ -359,13 +347,12 @@ int ak_tcp_socket_set_keepalive(ak_socket_fd_t fd, int idle_sec,
   }
 
   if (idle_sec <= 0) {
-    // Keepalive disabled, we're done
+
     return 0;
   }
 
-  // Set keepalive parameters
 #ifdef __APPLE__
-  // macOS uses TCP_KEEPALIVE instead of TCP_KEEPIDLE
+
   if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &idle_sec, sizeof(idle_sec)) <
       0) {
     if (error) {
@@ -374,7 +361,7 @@ int ak_tcp_socket_set_keepalive(ak_socket_fd_t fd, int idle_sec,
     return -1;
   }
 #else
-  // Linux uses TCP_KEEPIDLE
+
   if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle_sec, sizeof(idle_sec)) <
       0) {
     if (error) {
@@ -452,9 +439,9 @@ int ak_tcp_socket_poll_read(ak_socket_fd_t fd, int timeout_ms) {
     return -1;
   }
   if (ret == 0) {
-    return 0; // Timeout
+    return 0;
   }
-  return 1; // Ready
+  return 1;
 }
 
 void ak_tcp_socket_shutdown(ak_socket_fd_t fd) {
@@ -468,7 +455,6 @@ bool ak_tcp_socket_peer_closed(ak_socket_fd_t fd) {
     return true;
   }
 
-  // Use poll with 0 timeout to check if there's data or if peer closed
   struct pollfd pfd;
   pfd.fd = fd;
   pfd.events = POLLIN;
@@ -476,30 +462,28 @@ bool ak_tcp_socket_peer_closed(ak_socket_fd_t fd) {
 
   int ret = poll(&pfd, 1, 0);
   if (ret < 0) {
-    // Error - treat as closed
+
     return true;
   }
 
   if (ret == 0) {
-    // No events - connection still alive, just no data
+
     return false;
   }
 
-  // Check for hangup or error
   if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
     return true;
   }
 
-  // There's data to read - peek to check if it's EOF
   if (pfd.revents & POLLIN) {
     char buf;
     ssize_t n = recv(fd, &buf, 1, MSG_PEEK | MSG_DONTWAIT);
     if (n == 0) {
-      // EOF - peer closed
+
       return true;
     }
     if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-      // Error - treat as closed
+
       return true;
     }
   }
@@ -534,4 +518,4 @@ ak_tcp_error_t ak_tcp_map_error(int platform_errno) {
   }
 }
 
-#endif // !AK24_PLATFORM_WINDOWS
+#endif

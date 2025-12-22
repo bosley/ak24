@@ -1,18 +1,3 @@
-/**
- * @file hardening_tests.c
- * @brief TCP module production hardening tests
- *
- * Tests for production-critical features:
- * - Backpressure handling (Feature 1)
- * - Thread pool queue limits (Feature 2)
- * - Rate limiting (Feature 3)
- * - Bounded recv_until (Feature 4)
- * - Linger control (Feature 5)
- * - Non-blocking accept with timeout (Feature 6)
- * - Graceful connection draining (Feature 7)
- * - IPv6 support (Feature 8)
- * - Socket buffer tuning (Feature 9)
- */
 
 #include "kernel.h"
 #include "tcp.h"

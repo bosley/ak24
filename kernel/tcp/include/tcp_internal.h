@@ -53,10 +53,10 @@ struct ak_tcp_ctx_s {
  * @brief IP tracker for rate limiting (Feature 3)
  */
 typedef struct ak_tcp_ip_tracker_s {
-  char ip[46];                /**< IP address string */
-  size_t active_count;        /**< Active connections from this IP */
-  time_t last_connect_time;   /**< Last connection timestamp */
-  size_t connects_this_second;/**< Connections in current second */
+  char ip[46];                      /**< IP address string */
+  size_t active_count;              /**< Active connections from this IP */
+  time_t last_connect_time;         /**< Last connection timestamp */
+  size_t connects_this_second;      /**< Connections in current second */
   struct ak_tcp_ip_tracker_s *next; /**< Next in linked list */
 } ak_tcp_ip_tracker_t;
 
@@ -88,10 +88,10 @@ typedef struct ak_tcp_server_internal_s {
   size_t max_recv_buffer_bytes; /**< Max bytes buffered per conn */
 
   // Rate limiting (Feature 3)
-  size_t max_connections_per_ip; /**< Max concurrent from same IP */
-  size_t connection_rate_limit;  /**< Max new conn/sec per IP */
+  size_t max_connections_per_ip;    /**< Max concurrent from same IP */
+  size_t connection_rate_limit;     /**< Max new conn/sec per IP */
   ak_tcp_ip_tracker_t *ip_trackers; /**< Linked list of IP trackers */
-  AK24_MUTEX ip_tracker_mutex;   /**< Mutex for IP tracker access */
+  AK24_MUTEX ip_tracker_mutex;      /**< Mutex for IP tracker access */
 
   // Timeout defaults
   uint32_t default_recv_timeout_ms; /**< Default receive timeout */
@@ -119,13 +119,13 @@ typedef struct ak_tcp_server_internal_s {
   size_t socket_send_buffer; /**< SO_SNDBUF size */
 
   // Statistics
-  size_t connections_accepted;           /**< Total accepted */
-  size_t connections_rejected_limit;     /**< Rejected: conn limit */
-  size_t connections_rejected_queue;     /**< Rejected: queue full */
-  size_t connections_rejected_rate;      /**< Rejected: rate limit */
-  size_t connections_rejected_ip_limit;  /**< Rejected: per-IP limit */
-  size_t total_bytes_received;           /**< Total bytes received */
-  size_t total_bytes_sent;               /**< Total bytes sent */
+  size_t connections_accepted;          /**< Total accepted */
+  size_t connections_rejected_limit;    /**< Rejected: conn limit */
+  size_t connections_rejected_queue;    /**< Rejected: queue full */
+  size_t connections_rejected_rate;     /**< Rejected: rate limit */
+  size_t connections_rejected_ip_limit; /**< Rejected: per-IP limit */
+  size_t total_bytes_received;          /**< Total bytes received */
+  size_t total_bytes_sent;              /**< Total bytes sent */
 
   // Lambdas (owned)
   ak_lambda_t *on_connect;    /**< Connection accept callback */
@@ -187,7 +187,7 @@ ak_socket_fd_t ak_tcp_socket_create(const char **error);
  * @return Socket descriptor or AK_INVALID_SOCKET on failure
  */
 ak_socket_fd_t ak_tcp_socket_create_for_addr(const char *addr,
-                                              const char **error);
+                                             const char **error);
 
 /**
  * @brief Bind socket to address and port

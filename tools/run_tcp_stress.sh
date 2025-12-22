@@ -104,11 +104,11 @@ echo ""
 if [ "$SERVER_COUNT" -eq "$PARALLELISM" ] && [ "$CLIENT_COUNT" -eq "$PARALLELISM" ]; then
     SERVER_UNIQUE=$(echo "$SERVER_HASHES" | wc -l | tr -d ' ')
     CLIENT_UNIQUE=$(echo "$CLIENT_HASHES" | wc -l | tr -d ' ')
-    
+
     if [ "$SERVER_UNIQUE" -eq 1 ] && [ "$CLIENT_UNIQUE" -eq 1 ]; then
         SERVER_HASH=$(echo "$SERVER_HASHES" | awk '{print $2}')
         CLIENT_HASH=$(echo "$CLIENT_HASHES" | awk '{print $2}')
-        
+
         if [ "$SERVER_HASH" = "$CLIENT_HASH" ]; then
             echo "PASS: All $PARALLELISM connections completed with matching hash $SERVER_HASH"
             exit 0

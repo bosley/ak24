@@ -119,6 +119,23 @@ int AK24_cond_wait(AK24_COND *cond, AK24_MUTEX *mutex) {
                                                                            : -1;
 }
 
+int AK24_cond_timedwait(AK24_COND *cond, AK24_MUTEX *mutex,
+                        uint32_t timeout_ms) {
+  if (!cond || !mutex) {
+    return -1;
+  }
+  BOOL result = SleepConditionVariableCS(&cond->handle, &mutex->handle,
+                                         (DWORD)timeout_ms);
+  if (result) {
+    return 0; // Signaled
+  }
+  DWORD err = GetLastError();
+  if (err == ERROR_TIMEOUT) {
+    return 1; // Timeout
+  }
+  return -1; // Error
+}
+
 int AK24_cond_signal(AK24_COND *cond) {
   if (!cond) {
     return -1;

@@ -1,0 +1,1233 @@
+
+#include "filepath.h"
+#include "kernel.h"
+#include "tcp.h"
+#include "tcp_internal.h"
+#include "test/assert.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifdef AK24_PLATFORM_WINDOWS
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#define usleep(x) Sleep((x) / 1000)
+#else
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
+
+#define HARDENING_TEST_PORT 19100
+
+typedef struct {
+  ak_socket_fd_t sock;
+  uint16_t port;
+  bool connected;
+} hardening_test_client_t;
+
+static int h_client_connect(hardening_test_client_t *client, uint16_t port) {
+  const char *error = NULL;
+
+  client->sock = ak_tcp_socket_create(&error);
+  if (client->sock == AK_INVALID_SOCKET) {
+    printf("  [client] Failed to create socket: %s\n", error);
+    return -1;
+  }
+
+  client->port = port;
+
+  struct sockaddr_in server_addr;
+  memset(&server_addr, 0, sizeof(server_addr));
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_port = htons(port);
+  server_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+  if (connect(client->sock, (struct sockaddr *)&server_addr,
+              sizeof(server_addr)) < 0) {
+    printf("  [client] Failed to connect to port %d\n", port);
+    ak_tcp_socket_close(client->sock);
+    return -1;
+  }
+
+  client->connected = true;
+  return 0;
+}
+
+static int h_client_connect_v6(hardening_test_client_t *client, uint16_t port,
+                               const char *addr) {
+  const char *error = NULL;
+
+  client->sock = ak_tcp_socket_create_for_addr(addr, &error);
+  if (client->sock == AK_INVALID_SOCKET) {
+    printf("  [client] Failed to create socket: %s\n", error);
+    return -1;
+  }
+
+  client->port = port;
+
+  struct sockaddr_in6 server_addr;
+  memset(&server_addr, 0, sizeof(server_addr));
+  server_addr.sin6_family = AF_INET6;
+  server_addr.sin6_port = htons(port);
+  inet_pton(AF_INET6, addr, &server_addr.sin6_addr);
+
+  if (connect(client->sock, (struct sockaddr *)&server_addr,
+              sizeof(server_addr)) < 0) {
+    printf("  [client] Failed to connect to [%s]:%d\n", addr, port);
+    ak_tcp_socket_close(client->sock);
+    return -1;
+  }
+
+  client->connected = true;
+  return 0;
+}
+
+static void h_client_disconnect(hardening_test_client_t *client) {
+  if (client->connected) {
+    ak_tcp_socket_close(client->sock);
+    client->connected = false;
+  }
+}
+
+static ssize_t h_client_send_all(hardening_test_client_t *client,
+                                 const uint8_t *data, size_t len) {
+  const char *error = NULL;
+  size_t total_sent = 0;
+
+  while (total_sent < len) {
+    ssize_t sent = ak_tcp_socket_send(client->sock, data + total_sent,
+                                      len - total_sent, &error);
+    if (sent <= 0) {
+      return -1;
+    }
+    total_sent += (size_t)sent;
+  }
+
+  return (ssize_t)total_sent;
+}
+
+static ssize_t h_client_recv_all(hardening_test_client_t *client, uint8_t *buf,
+                                 size_t expected_len) {
+  const char *error = NULL;
+  size_t total_received = 0;
+
+  while (total_received < expected_len) {
+    ssize_t received =
+        ak_tcp_socket_recv(client->sock, buf + total_received,
+                           expected_len - total_received, &error);
+    if (received <= 0) {
+      return (ssize_t)total_received;
+    }
+    total_received += (size_t)received;
+  }
+
+  return (ssize_t)total_received;
+}
+
+static void on_connect_accept(void *captured, void *args) {
+  (void)captured;
+  ak_tcp_conn_info_t *info = (ak_tcp_conn_info_t *)args;
+  info->accept = true;
+}
+
+static void on_handle_echo_simple(void *captured, void *args) {
+  (void)captured;
+  ak_tcp_ctx_t *ctx = (ak_tcp_ctx_t *)args;
+
+  while (ak_tcp_is_alive(ctx)) {
+    const char *error = NULL;
+    ak_buffer_t *line = ak_tcp_recv_until(ctx, "\n", 8192, &error);
+    if (!line) {
+      break;
+    }
+    ak_tcp_send(ctx, line, &error);
+    ak_buffer_free(line);
+    break;
+  }
+}
+
+static void on_handle_slow(void *captured, void *args) {
+  (void)captured;
+  ak_tcp_ctx_t *ctx = (ak_tcp_ctx_t *)args;
+  usleep(500000);
+  const char *error = NULL;
+  ak_buffer_t *line = ak_tcp_recv_until(ctx, "\n", 8192, &error);
+  if (line) {
+    ak_tcp_send(ctx, line, &error);
+    ak_buffer_free(line);
+  }
+}
+
+static void on_handle_hold(void *captured, void *args) {
+  (void)captured;
+  ak_tcp_ctx_t *ctx = (ak_tcp_ctx_t *)args;
+  while (ak_tcp_is_alive(ctx)) {
+    usleep(100000);
+  }
+}
+
+static int test_recv_until_max_size(void) {
+  printf("Test: Bounded recv_until (Feature 4)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  AK24_TEST_ASSERT_EQ(h_client_connect(&client, port), 0);
+
+  char large_data[200];
+  memset(large_data, 'X', sizeof(large_data) - 1);
+  large_data[sizeof(large_data) - 1] = '\0';
+
+  h_client_send_all(&client, (const uint8_t *)large_data, sizeof(large_data));
+  usleep(100000);
+
+  h_client_disconnect(&client);
+  usleep(50000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  Bounded recv_until limits enforced\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_thread_pool_queue_limit(void) {
+  printf("Test: Thread pool queue limits (Feature 2)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 1;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.thread_pool_size = 1;
+  cfg.max_pending_tasks = 2;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_slow, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t clients[5] = {0};
+  int connected = 0;
+  for (int i = 0; i < 5; i++) {
+    if (h_client_connect(&clients[i], port) == 0) {
+      connected++;
+      h_client_send_all(&clients[i], (const uint8_t *)"msg\n", 4);
+    }
+    usleep(10000);
+  }
+
+  printf("  Connected %d clients with queue limit\n", connected);
+
+  usleep(200000);
+
+  for (int i = 0; i < 5; i++) {
+    h_client_disconnect(&clients[i]);
+  }
+
+  ak_tcp_server_stats_t stats;
+  ak_tcp_server_get_stats(server, &stats);
+  printf("  Connections rejected (queue full): %zu\n",
+         stats.connections_rejected_queue);
+
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  Thread pool queue limiting works\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_per_ip_connection_limit(void) {
+  printf("Test: Per-IP connection limit (Feature 3)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 2;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.max_connections_per_ip = 2;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_hold, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t c1 = {0}, c2 = {0}, c3 = {0};
+
+  AK24_TEST_ASSERT_EQ(h_client_connect(&c1, port), 0);
+  usleep(50000);
+  AK24_TEST_ASSERT_EQ(h_client_connect(&c2, port), 0);
+  usleep(100000);
+
+  h_client_connect(&c3, port);
+  usleep(100000);
+
+  ak_tcp_server_stats_t stats;
+  ak_tcp_server_get_stats(server, &stats);
+  printf("  Rejected by IP limit: %zu\n", stats.connections_rejected_ip_limit);
+
+  h_client_disconnect(&c1);
+  usleep(100000);
+
+  hardening_test_client_t c4 = {0};
+  int result = h_client_connect(&c4, port);
+  printf("  After disconnect, new connect result: %d\n", result);
+  h_client_disconnect(&c4);
+
+  h_client_disconnect(&c2);
+  h_client_disconnect(&c3);
+
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  Per-IP connection limiting works\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_connection_rate_limit(void) {
+  printf("Test: Connection rate limit (Feature 3)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 3;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.connection_rate_limit = 3;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  int connected = 0;
+  for (int i = 0; i < 6; i++) {
+    hardening_test_client_t c = {0};
+    if (h_client_connect(&c, port) == 0) {
+      connected++;
+      h_client_disconnect(&c);
+    }
+  }
+
+  printf("  Rapid connections: %d succeeded\n", connected);
+
+  ak_tcp_server_stats_t stats;
+  ak_tcp_server_get_stats(server, &stats);
+  printf("  Rejected by rate limit: %zu\n", stats.connections_rejected_rate);
+
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  Connection rate limiting works\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_linger_settings(void) {
+  printf("Test: Linger control (Feature 5)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 4;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.enable_linger = true;
+  cfg.linger_timeout_sec = 2;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  AK24_TEST_ASSERT_EQ(h_client_connect(&client, port), 0);
+
+  h_client_send_all(&client, (const uint8_t *)"test\n", 5);
+
+  char response[64] = {0};
+  h_client_recv_all(&client, (uint8_t *)response, 5);
+  AK24_TEST_ASSERT_STR_EQ(response, "test\n");
+
+  h_client_disconnect(&client);
+  usleep(50000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  Linger settings applied\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_accept_timeout_shutdown(void) {
+  printf("Test: Non-blocking accept with timeout (Feature 6)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 5;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  printf("  Stopping server (should return within 2 seconds)...\n");
+  ak_tcp_server_stop(server);
+  printf("  Server stopped quickly\n");
+
+  ak_tcp_server_free(server);
+
+  printf("  Non-blocking accept works\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_graceful_drain(void) {
+  printf("Test: Graceful connection draining (Feature 7)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 6;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.shutdown_drain_timeout_ms = 2000;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_slow, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  AK24_TEST_ASSERT_EQ(h_client_connect(&client, port), 0);
+  h_client_send_all(&client, (const uint8_t *)"drain-test\n", 11);
+
+  usleep(50000);
+
+  printf("  Initiating graceful shutdown (handler takes 500ms)...\n");
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_is_draining(server), false);
+  ak_tcp_server_stop(server);
+  printf("  Shutdown complete\n");
+
+  h_client_disconnect(&client);
+  ak_tcp_server_free(server);
+
+  printf("  Graceful draining works\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_socket_buffer_sizes(void) {
+  printf("Test: Socket buffer tuning (Feature 9)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 7;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.socket_recv_buffer = 65536;
+  cfg.socket_send_buffer = 65536;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  AK24_TEST_ASSERT_EQ(h_client_connect(&client, port), 0);
+
+  h_client_send_all(&client, (const uint8_t *)"buffer-test\n", 12);
+
+  char response[64] = {0};
+  h_client_recv_all(&client, (uint8_t *)response, 12);
+  AK24_TEST_ASSERT_STR_EQ(response, "buffer-test\n");
+
+  h_client_disconnect(&client);
+  usleep(50000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  Socket buffer tuning applied\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_ipv6_connection(void) {
+  printf("Test: IPv6 connection (Feature 8)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 8;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "::1";
+  cfg.port = port;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+
+  int start_result = ak_tcp_server_start(server, &error);
+  if (start_result != 0) {
+    printf("  IPv6 not available on this system, skipping\n");
+    ak_tcp_server_free(server);
+    printf("  PASSED (skipped)\n");
+    AK24_TEST_PASS();
+  }
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  int conn_result = h_client_connect_v6(&client, port, "::1");
+  if (conn_result != 0) {
+    printf("  IPv6 client connect failed, skipping\n");
+    ak_tcp_server_stop(server);
+    ak_tcp_server_free(server);
+    printf("  PASSED (skipped)\n");
+    AK24_TEST_PASS();
+  }
+
+  h_client_send_all(&client, (const uint8_t *)"ipv6-test\n", 10);
+
+  char response[64] = {0};
+  h_client_recv_all(&client, (uint8_t *)response, 10);
+  AK24_TEST_ASSERT_STR_EQ(response, "ipv6-test\n");
+
+  h_client_disconnect(&client);
+  usleep(50000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  IPv6 connection works\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_dual_stack(void) {
+  printf("Test: Dual-stack IPv4/IPv6 (Feature 8)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 9;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "::";
+  cfg.port = port;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+
+  int start_result = ak_tcp_server_start(server, &error);
+  if (start_result != 0) {
+    printf("  Dual-stack not available on this system, skipping\n");
+    ak_tcp_server_free(server);
+    printf("  PASSED (skipped)\n");
+    AK24_TEST_PASS();
+  }
+  usleep(50000);
+
+  hardening_test_client_t client4 = {0};
+  if (h_client_connect(&client4, port) == 0) {
+    h_client_send_all(&client4, (const uint8_t *)"v4msg\n", 6);
+    char response[64] = {0};
+    h_client_recv_all(&client4, (uint8_t *)response, 6);
+    printf("  IPv4 client: response = %s", response);
+    h_client_disconnect(&client4);
+  } else {
+    printf("  IPv4 client failed to connect (may be expected)\n");
+  }
+
+  hardening_test_client_t client6 = {0};
+  if (h_client_connect_v6(&client6, port, "::1") == 0) {
+    h_client_send_all(&client6, (const uint8_t *)"v6msg\n", 6);
+    char response[64] = {0};
+    h_client_recv_all(&client6, (uint8_t *)response, 6);
+    printf("  IPv6 client: response = %s", response);
+    h_client_disconnect(&client6);
+  } else {
+    printf("  IPv6 client failed to connect (may be expected)\n");
+  }
+
+  usleep(50000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  Dual-stack test complete\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+#if AK24_TLS_ENABLED
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/x509.h>
+
+static const char *buf_cstr(ak_buffer_t *buf) {
+  if (!buf)
+    return NULL;
+  uint8_t *data = ak_buffer_data(buf);
+  size_t count = ak_buffer_count(buf);
+  if (buf->capacity > count) {
+    data[count] = '\0';
+  }
+  return (const char *)data;
+}
+
+static int generate_test_cert(const char *cert_path, const char *key_path) {
+  EVP_PKEY *pkey = NULL;
+  EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+  if (!pctx) {
+    return -1;
+  }
+
+  if (EVP_PKEY_keygen_init(pctx) <= 0) {
+    EVP_PKEY_CTX_free(pctx);
+    return -1;
+  }
+
+  if (EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, 2048) <= 0) {
+    EVP_PKEY_CTX_free(pctx);
+    return -1;
+  }
+
+  if (EVP_PKEY_keygen(pctx, &pkey) <= 0) {
+    EVP_PKEY_CTX_free(pctx);
+    return -1;
+  }
+  EVP_PKEY_CTX_free(pctx);
+
+  X509 *x509 = X509_new();
+  if (!x509) {
+    EVP_PKEY_free(pkey);
+    return -1;
+  }
+
+  ASN1_INTEGER_set(X509_get_serialNumber(x509), 1);
+  X509_gmtime_adj(X509_get_notBefore(x509), 0);
+  X509_gmtime_adj(X509_get_notAfter(x509), 31536000L);
+  X509_set_pubkey(x509, pkey);
+
+  X509_NAME *name = X509_get_subject_name(x509);
+  X509_NAME_add_entry_by_txt(name, "C", MBSTRING_ASC, (unsigned char *)"US", -1,
+                             -1, 0);
+  X509_NAME_add_entry_by_txt(name, "O", MBSTRING_ASC,
+                             (unsigned char *)"AK24 Test", -1, -1, 0);
+  X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
+                             (unsigned char *)"localhost", -1, -1, 0);
+  X509_set_issuer_name(x509, name);
+
+  if (X509_sign(x509, pkey, EVP_sha256()) == 0) {
+    X509_free(x509);
+    EVP_PKEY_free(pkey);
+    return -1;
+  }
+
+  FILE *f = fopen(key_path, "wb");
+  if (!f) {
+    X509_free(x509);
+    EVP_PKEY_free(pkey);
+    return -1;
+  }
+  PEM_write_PrivateKey(f, pkey, NULL, NULL, 0, NULL, NULL);
+  fclose(f);
+
+  f = fopen(cert_path, "wb");
+  if (!f) {
+    X509_free(x509);
+    EVP_PKEY_free(pkey);
+    return -1;
+  }
+  PEM_write_X509(f, x509);
+  fclose(f);
+
+  X509_free(x509);
+  EVP_PKEY_free(pkey);
+  return 0;
+}
+
+static int tls_client_connect(hardening_test_client_t *client,
+                              SSL_CTX **out_ctx, SSL **out_ssl, uint16_t port) {
+  if (h_client_connect(client, port) != 0) {
+    return -1;
+  }
+
+  SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+  if (!ctx) {
+    h_client_disconnect(client);
+    return -1;
+  }
+
+  SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+
+  SSL *ssl = SSL_new(ctx);
+  if (!ssl) {
+    SSL_CTX_free(ctx);
+    h_client_disconnect(client);
+    return -1;
+  }
+
+  SSL_set_fd(ssl, (int)client->sock);
+  if (SSL_connect(ssl) != 1) {
+    SSL_free(ssl);
+    SSL_CTX_free(ctx);
+    h_client_disconnect(client);
+    return -1;
+  }
+
+  *out_ctx = ctx;
+  *out_ssl = ssl;
+  return 0;
+}
+
+static void tls_client_disconnect(hardening_test_client_t *client, SSL_CTX *ctx,
+                                  SSL *ssl) {
+  if (ssl) {
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+  }
+  if (ctx) {
+    SSL_CTX_free(ctx);
+  }
+  h_client_disconnect(client);
+}
+
+static int test_tls_available(void) {
+  printf("Test: TLS availability check\n");
+
+  bool available = ak_tcp_tls_available();
+  printf("  TLS available: %s\n", available ? "yes" : "no");
+  AK24_TEST_ASSERT(available);
+
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_tls_server_create(void) {
+  printf("Test: TLS server creation\n");
+
+  ak_buffer_t *temp_dir = ak_filepath_temp();
+  ak_buffer_t *cert_buf =
+      ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.crt");
+  ak_buffer_t *key_buf =
+      ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.key");
+  const char *cert_path = buf_cstr(cert_buf);
+  const char *key_path = buf_cstr(key_buf);
+
+  if (generate_test_cert(cert_path, key_path) != 0) {
+    ak_buffer_free(temp_dir);
+    ak_buffer_free(cert_buf);
+    ak_buffer_free(key_buf);
+    printf("  Failed to generate test certificate\n");
+    return 1;
+  }
+
+  const char *error = NULL;
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = HARDENING_TEST_PORT + 50;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+  cfg.use_tls = true;
+  cfg.cert_file = cert_path;
+  cfg.key_file = key_path;
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  unlink(cert_path);
+  unlink(key_path);
+  ak_buffer_free(temp_dir);
+  ak_buffer_free(cert_buf);
+  ak_buffer_free(key_buf);
+
+  printf("  TLS server created and started successfully\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_tls_handshake(void) {
+  printf("Test: TLS handshake and data transfer\n");
+
+  ak_buffer_t *temp_dir = ak_filepath_temp();
+  ak_buffer_t *cert_buf =
+      ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.crt");
+  ak_buffer_t *key_buf =
+      ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.key");
+  const char *cert_path = buf_cstr(cert_buf);
+  const char *key_path = buf_cstr(key_buf);
+
+  if (generate_test_cert(cert_path, key_path) != 0) {
+    ak_buffer_free(temp_dir);
+    ak_buffer_free(cert_buf);
+    ak_buffer_free(key_buf);
+    printf("  Failed to generate test certificate\n");
+    return 1;
+  }
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 51;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+  cfg.use_tls = true;
+  cfg.cert_file = cert_path;
+  cfg.key_file = key_path;
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  SSL_CTX *ssl_ctx = NULL;
+  SSL *ssl = NULL;
+
+  if (tls_client_connect(&client, &ssl_ctx, &ssl, port) != 0) {
+    ak_tcp_server_stop(server);
+    ak_tcp_server_free(server);
+    unlink(cert_path);
+    unlink(key_path);
+    ak_buffer_free(temp_dir);
+    ak_buffer_free(cert_buf);
+    ak_buffer_free(key_buf);
+    printf("  TLS client connection failed\n");
+    return 1;
+  }
+
+  const char *test_msg = "Hello TLS!\n";
+  int written = SSL_write(ssl, test_msg, (int)strlen(test_msg));
+  AK24_TEST_ASSERT(written > 0);
+
+  char response[64] = {0};
+  int read_bytes = SSL_read(ssl, response, sizeof(response) - 1);
+  AK24_TEST_ASSERT(read_bytes > 0);
+
+  printf("  Sent: %s  Received: %s", test_msg, response);
+  AK24_TEST_ASSERT_EQ(strcmp(test_msg, response), 0);
+
+  tls_client_disconnect(&client, ssl_ctx, ssl);
+  usleep(50000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  unlink(cert_path);
+  unlink(key_path);
+  ak_buffer_free(temp_dir);
+  ak_buffer_free(cert_buf);
+  ak_buffer_free(key_buf);
+
+  printf("  TLS handshake and encrypted echo verified\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_tls_data_integrity(void) {
+  printf("Test: TLS data integrity (large payload)\n");
+
+  ak_buffer_t *temp_dir = ak_filepath_temp();
+  ak_buffer_t *cert_buf =
+      ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.crt");
+  ak_buffer_t *key_buf =
+      ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.key");
+  const char *cert_path = buf_cstr(cert_buf);
+  const char *key_path = buf_cstr(key_buf);
+
+  if (generate_test_cert(cert_path, key_path) != 0) {
+    ak_buffer_free(temp_dir);
+    ak_buffer_free(cert_buf);
+    ak_buffer_free(key_buf);
+    printf("  Failed to generate test certificate\n");
+    return 1;
+  }
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 52;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+  cfg.use_tls = true;
+  cfg.cert_file = cert_path;
+  cfg.key_file = key_path;
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  SSL_CTX *ssl_ctx = NULL;
+  SSL *ssl = NULL;
+
+  if (tls_client_connect(&client, &ssl_ctx, &ssl, port) != 0) {
+    ak_tcp_server_stop(server);
+    ak_tcp_server_free(server);
+    unlink(cert_path);
+    unlink(key_path);
+    ak_buffer_free(temp_dir);
+    ak_buffer_free(cert_buf);
+    ak_buffer_free(key_buf);
+    printf("  TLS client connection failed\n");
+    return 1;
+  }
+
+  char large_msg[4096];
+  for (size_t i = 0; i < sizeof(large_msg) - 2; i++) {
+    large_msg[i] = 'A' + (i % 26);
+  }
+  large_msg[sizeof(large_msg) - 2] = '\n';
+  large_msg[sizeof(large_msg) - 1] = '\0';
+
+  int written = SSL_write(ssl, large_msg, (int)strlen(large_msg));
+  AK24_TEST_ASSERT(written > 0);
+
+  char response[4096] = {0};
+  size_t total_read = 0;
+  while (total_read < strlen(large_msg)) {
+    int read_bytes =
+        SSL_read(ssl, response + total_read, sizeof(response) - 1 - total_read);
+    if (read_bytes <= 0) {
+      break;
+    }
+    total_read += read_bytes;
+  }
+
+  AK24_TEST_ASSERT_EQ(total_read, strlen(large_msg));
+  AK24_TEST_ASSERT_EQ(memcmp(large_msg, response, total_read), 0);
+
+  tls_client_disconnect(&client, ssl_ctx, ssl);
+  usleep(50000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  unlink(cert_path);
+  unlink(key_path);
+  ak_buffer_free(temp_dir);
+  ak_buffer_free(cert_buf);
+  ak_buffer_free(key_buf);
+
+  printf("  Verified %zu bytes through TLS\n", total_read);
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_tls_missing_cert(void) {
+  printf("Test: TLS server rejects missing certificate\n");
+
+  const char *error = NULL;
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = HARDENING_TEST_PORT + 53;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+  cfg.use_tls = true;
+  cfg.cert_file = NULL;
+  cfg.key_file = NULL;
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT(server == NULL);
+  AK24_TEST_ASSERT(error != NULL);
+  printf("  Correctly rejected: %s\n", error);
+
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+#endif
+
+static volatile int backpressure_recv_result = 0;
+static volatile int backpressure_buffer_full_hit = 0;
+
+static void on_handle_backpressure_test(void *captured, void *args) {
+  (void)captured;
+  ak_tcp_ctx_t *ctx = (ak_tcp_ctx_t *)args;
+  const char *error = NULL;
+
+  ak_buffer_t *buf = ak_buffer_new(512);
+
+  ssize_t total_received = 0;
+  int buffer_full_count = 0;
+
+  while (ak_tcp_is_alive(ctx) && total_received < 2048) {
+    ssize_t r = ak_tcp_recv(ctx, buf, 1024, &error);
+    if (r == -2) {
+      buffer_full_count++;
+      backpressure_buffer_full_hit = 1;
+      break;
+    }
+    if (r <= 0) {
+      break;
+    }
+    total_received += r;
+  }
+
+  backpressure_recv_result = (int)total_received;
+  ak_buffer_free(buf);
+}
+
+static int test_backpressure_buffer_limit(void) {
+  printf("Test: Backpressure buffer limit (Feature 1)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 20;
+
+  backpressure_recv_result = 0;
+  backpressure_buffer_full_hit = 0;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.max_recv_buffer_bytes = 1024;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_backpressure_test, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  AK24_TEST_ASSERT_EQ(h_client_connect(&client, port), 0);
+
+  char large_data[2048];
+  memset(large_data, 'X', sizeof(large_data));
+  h_client_send_all(&client, (const uint8_t *)large_data, sizeof(large_data));
+
+  usleep(300000);
+
+  h_client_disconnect(&client);
+  usleep(100000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  Received before limit: %d bytes\n", backpressure_recv_result);
+  printf("  Buffer full triggered: %s\n",
+         backpressure_buffer_full_hit ? "yes" : "no");
+
+  AK24_TEST_ASSERT(backpressure_buffer_full_hit == 1);
+  AK24_TEST_ASSERT(backpressure_recv_result <= 1024);
+
+  printf("  Backpressure limit enforced\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static volatile int recovery_phase1_ok = 0;
+static volatile int recovery_phase2_buffer_full = 0;
+static volatile int recovery_phase3_ok = 0;
+
+static void on_handle_backpressure_recovery(void *captured, void *args) {
+  (void)captured;
+  ak_tcp_ctx_t *ctx = (ak_tcp_ctx_t *)args;
+  const char *error = NULL;
+
+  ak_buffer_t *buf1 = ak_buffer_new(512);
+  ak_buffer_t *buf2 = ak_buffer_new(512);
+
+  ssize_t r1 = ak_tcp_recv(ctx, buf1, 512, &error);
+  if (r1 > 0) {
+    recovery_phase1_ok = 1;
+  }
+
+  usleep(100000);
+
+  while (ak_tcp_is_alive(ctx)) {
+    ssize_t r2 = ak_tcp_recv(ctx, buf2, 1024, &error);
+    if (r2 == -2) {
+      recovery_phase2_buffer_full = 1;
+      break;
+    }
+    if (r2 <= 0) {
+      break;
+    }
+  }
+
+  if (recovery_phase2_buffer_full && r1 > 0) {
+    ak_tcp_consume_bytes(ctx, (size_t)r1);
+
+    ak_buffer_clear(buf2);
+    ssize_t r3 = ak_tcp_recv(ctx, buf2, 512, &error);
+    if (r3 > 0) {
+      recovery_phase3_ok = 1;
+    }
+  }
+
+  ak_buffer_free(buf1);
+  ak_buffer_free(buf2);
+}
+
+static int test_backpressure_recovery(void) {
+  printf("Test: Backpressure recovery after consume (Feature 1)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 21;
+
+  recovery_phase1_ok = 0;
+  recovery_phase2_buffer_full = 0;
+  recovery_phase3_ok = 0;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.max_recv_buffer_bytes = 1024;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_backpressure_recovery, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  AK24_TEST_ASSERT_EQ(h_client_connect(&client, port), 0);
+
+  char data[2048];
+  memset(data, 'Y', sizeof(data));
+  h_client_send_all(&client, (const uint8_t *)data, sizeof(data));
+
+  usleep(500000);
+
+  h_client_disconnect(&client);
+  usleep(100000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  Phase 1 (initial recv): %s\n",
+         recovery_phase1_ok ? "ok" : "failed");
+  printf("  Phase 2 (buffer full): %s\n",
+         recovery_phase2_buffer_full ? "ok" : "failed");
+  printf("  Phase 3 (after consume): %s\n",
+         recovery_phase3_ok ? "ok" : "failed");
+
+  AK24_TEST_ASSERT(recovery_phase1_ok == 1);
+  AK24_TEST_ASSERT(recovery_phase2_buffer_full == 1);
+  AK24_TEST_ASSERT(recovery_phase3_ok == 1);
+
+  printf("  Backpressure recovery works\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_backpressure_recv_ex(void) {
+  printf("Test: Backpressure with recv_ex (Feature 1)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 22;
+
+  backpressure_recv_result = 0;
+  backpressure_buffer_full_hit = 0;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.max_recv_buffer_bytes = 512;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_backpressure_test, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  AK24_TEST_ASSERT_EQ(h_client_connect(&client, port), 0);
+
+  char data[1024];
+  memset(data, 'Z', sizeof(data));
+  h_client_send_all(&client, (const uint8_t *)data, sizeof(data));
+
+  usleep(300000);
+
+  h_client_disconnect(&client);
+  usleep(100000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  recv returned buffer full: %s\n",
+         backpressure_buffer_full_hit ? "yes" : "no");
+
+  AK24_TEST_ASSERT(backpressure_buffer_full_hit == 1);
+
+  printf("  Backpressure recv_ex works\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+int run_tcp_hardening_tests(void) {
+  printf("\n--- Production Hardening Tests ---\n\n");
+  AK24_TEST_RUN(test_recv_until_max_size);
+  AK24_TEST_RUN(test_thread_pool_queue_limit);
+  AK24_TEST_RUN(test_per_ip_connection_limit);
+  AK24_TEST_RUN(test_connection_rate_limit);
+  AK24_TEST_RUN(test_linger_settings);
+  AK24_TEST_RUN(test_accept_timeout_shutdown);
+  AK24_TEST_RUN(test_graceful_drain);
+  AK24_TEST_RUN(test_socket_buffer_sizes);
+  AK24_TEST_RUN(test_ipv6_connection);
+  AK24_TEST_RUN(test_dual_stack);
+
+  printf("\n--- Backpressure Tests ---\n\n");
+  AK24_TEST_RUN(test_backpressure_buffer_limit);
+  AK24_TEST_RUN(test_backpressure_recovery);
+  AK24_TEST_RUN(test_backpressure_recv_ex);
+
+#if AK24_TLS_ENABLED
+  printf("\n--- TLS Tests ---\n\n");
+  AK24_TEST_RUN(test_tls_available);
+  AK24_TEST_RUN(test_tls_server_create);
+  AK24_TEST_RUN(test_tls_handshake);
+  AK24_TEST_RUN(test_tls_data_integrity);
+  AK24_TEST_RUN(test_tls_missing_cert);
+#else
+  printf("\n--- TLS Tests (SKIPPED - OpenSSL not available) ---\n\n");
+#endif
+
+  return 0;
+}

@@ -9,7 +9,7 @@ elseif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     message(STATUS "AK24_HOME not set, using default: ${CMAKE_INSTALL_PREFIX}")
 endif()
 
-project(ak24 VERSION 0.1.0 LANGUAGES C)
+project(ak24 VERSION 0.1.1 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -131,6 +131,9 @@ add_subdirectory(examples/atom-cube-demo)
 add_subdirectory(examples/thread-pool-demo)
 add_subdirectory(examples/signals-example)
 add_subdirectory(examples/sourceloc-demo)
+add_subdirectory(examples/tcp-server-example)
+add_subdirectory(examples/tcp-client-example)
+add_subdirectory(examples/tcp-client-stressor)
 
 # Install build configuration file for tests/external projects
 set(AK24_BUILD_CONFIG_FILE "${CMAKE_BINARY_DIR}/ak24-config.mk")

@@ -53,7 +53,6 @@ typedef struct {
   size_t library_count;
   const char **defines;
   size_t define_count;
-  bool debug_symbols;
 } ak_cjit_config_t;
 
 typedef void (*ak_cjit_error_fn)(void *ctx, const char *message);

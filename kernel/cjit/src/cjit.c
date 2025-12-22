@@ -24,7 +24,6 @@ const char *ak_cjit_backend_name(void) { return "tcc"; }
 
 ak_cjit_config_t ak_cjit_config_default(void) {
   ak_cjit_config_t config = {0};
-  config.debug_symbols = false;
   return config;
 }
 
@@ -50,10 +49,6 @@ ak_cjit_unit_t *ak_cjit_unit_new(const ak_cjit_config_t *config,
   tcc_set_output_type(unit->tcc, TCC_OUTPUT_MEMORY);
 
   if (config) {
-    if (config->debug_symbols) {
-      tcc_set_options(unit->tcc, "-g");
-    }
-
     for (size_t i = 0; i < config->include_path_count; i++) {
       if (config->include_paths[i]) {
         tcc_add_include_path(unit->tcc, config->include_paths[i]);

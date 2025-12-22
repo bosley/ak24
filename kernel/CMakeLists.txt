@@ -197,13 +197,11 @@ file(GLOB_RECURSE KERNEL_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tcp/include/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/cjit/include/*.h
 )
 
 # Add TCP subdirectory (for tests only - sources are compiled into kernel)
 add_subdirectory(tcp)
-
-# Add CJIT subdirectory
-add_subdirectory(cjit)
 
 if(AK24_BUILD_SHARED_KERNEL)
     add_library(ak24_kernel SHARED ${KERNEL_SOURCES})
@@ -372,6 +370,7 @@ list(REMOVE_ITEM ALL_COMPILE_TIME_TESTS
     ${BUFFER_TEST_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/scanner_test_runner.c
     ${SCANNER_TEST_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/cjit/test/extended_tests.c
 )
 
 foreach(TEST_FILE ${ALL_COMPILE_TIME_TESTS})

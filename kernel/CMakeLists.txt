@@ -58,6 +58,7 @@ file(GLOB_RECURSE KERNEL_SOURCES
 
 # Add TCP sources (platform-specific handled below)
 list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tcp/src/tcp.c)
+list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tcp/src/tcp_client.c)
 
 # Add TLS support (compiled in when OpenSSL found, code is #ifdef guarded)
 list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tcp/src/tcp_tls.c)

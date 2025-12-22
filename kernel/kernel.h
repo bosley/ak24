@@ -40,6 +40,7 @@
 #include "sourceloc.h"
 
 #include "tcp.h"
+#include "tcp_client.h"
 
 #include <stddef.h>
 #include <time.h>

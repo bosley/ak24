@@ -397,6 +397,19 @@ void ak_tcp_socket_shutdown(ak_socket_fd_t fd);
 bool ak_tcp_socket_peer_closed(ak_socket_fd_t fd);
 
 /**
+ * @brief Connect socket to remote host
+ *
+ * @param fd Socket descriptor
+ * @param host Remote host (IP or hostname)
+ * @param port Remote port
+ * @param timeout_ms Connection timeout (0 = system default)
+ * @param error Output error message on failure
+ * @return 0 on success, -1 on failure
+ */
+int ak_tcp_socket_connect(ak_socket_fd_t fd, const char *host, uint16_t port,
+                          uint32_t timeout_ms, const char **error);
+
+/**
  * @brief Map platform errno to ak_tcp_error_t
  *
  * @param platform_errno Platform-specific error code
@@ -524,6 +537,35 @@ void ak_tcp_tls_free(SSL *ssl);
  * @return Error string (static buffer, do not free)
  */
 const char *ak_tcp_tls_error_string(void);
+
+/**
+ * @brief Create SSL context for client
+ *
+ * @param ca_file Path to CA certificate (NULL for system CAs)
+ * @param cert_file Path to client certificate (NULL for no client auth)
+ * @param key_file Path to client private key
+ * @param verify_server Verify server certificate
+ * @param ciphers Cipher list (NULL for defaults)
+ * @param min_version Minimum TLS version (0 = TLS 1.2)
+ * @param error Output error message
+ * @return SSL_CTX or NULL on failure
+ */
+SSL_CTX *ak_tcp_tls_client_ctx_new(const char *ca_file, const char *cert_file,
+                                   const char *key_file, bool verify_server,
+                                   const char *ciphers, int min_version,
+                                   const char **error);
+
+/**
+ * @brief Perform TLS handshake as client
+ *
+ * @param ssl_ctx Client SSL context
+ * @param socket_fd Connected socket
+ * @param sni_hostname SNI hostname for server
+ * @param error Output error message
+ * @return SSL connection or NULL on failure
+ */
+SSL *ak_tcp_tls_connect(SSL_CTX *ssl_ctx, ak_socket_fd_t socket_fd,
+                        const char *sni_hostname, const char **error);
 
 #endif // AK24_TLS_ENABLED
 

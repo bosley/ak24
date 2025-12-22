@@ -518,4 +518,114 @@ ak_tcp_error_t ak_tcp_map_error(int platform_errno) {
   }
 }
 
+#include <netdb.h>
+
+int ak_tcp_socket_connect(ak_socket_fd_t fd, const char *host, uint16_t port,
+                          uint32_t timeout_ms, const char **error) {
+  if (!host) {
+    if (error) {
+      *error = "Host is required";
+    }
+    return -1;
+  }
+
+  struct addrinfo hints, *result, *rp;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+
+  char port_str[16];
+  snprintf(port_str, sizeof(port_str), "%u", port);
+
+  int gai_result = getaddrinfo(host, port_str, &hints, &result);
+  if (gai_result != 0) {
+    if (error) {
+      *error = gai_strerror(gai_result);
+    }
+    return -1;
+  }
+
+  bool was_blocking = true;
+  if (timeout_ms > 0) {
+    if (ak_tcp_socket_set_nonblocking(fd, true, error) != 0) {
+      freeaddrinfo(result);
+      return -1;
+    }
+    was_blocking = false;
+  }
+
+  int connect_result = -1;
+  for (rp = result; rp != NULL; rp = rp->ai_next) {
+    connect_result = connect(fd, rp->ai_addr, rp->ai_addrlen);
+
+    if (connect_result == 0) {
+      break;
+    }
+
+    if (errno == EINPROGRESS && timeout_ms > 0) {
+      struct pollfd pfd;
+      pfd.fd = fd;
+      pfd.events = POLLOUT;
+      pfd.revents = 0;
+
+      int poll_result = poll(&pfd, 1, (int)timeout_ms);
+      if (poll_result < 0) {
+        if (error) {
+          *error = strerror(errno);
+        }
+        freeaddrinfo(result);
+        if (!was_blocking) {
+          ak_tcp_socket_set_nonblocking(fd, false, NULL);
+        }
+        return -1;
+      }
+      if (poll_result == 0) {
+        if (error) {
+          *error = "Connection timed out";
+        }
+        freeaddrinfo(result);
+        if (!was_blocking) {
+          ak_tcp_socket_set_nonblocking(fd, false, NULL);
+        }
+        return -1;
+      }
+
+      int so_error = 0;
+      socklen_t len = sizeof(so_error);
+      if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &so_error, &len) < 0) {
+        if (error) {
+          *error = strerror(errno);
+        }
+        freeaddrinfo(result);
+        if (!was_blocking) {
+          ak_tcp_socket_set_nonblocking(fd, false, NULL);
+        }
+        return -1;
+      }
+
+      if (so_error == 0) {
+        connect_result = 0;
+        break;
+      }
+
+      errno = so_error;
+    }
+  }
+
+  freeaddrinfo(result);
+
+  if (!was_blocking) {
+    ak_tcp_socket_set_nonblocking(fd, false, NULL);
+  }
+
+  if (connect_result != 0) {
+    if (error) {
+      *error = strerror(errno);
+    }
+    return -1;
+  }
+
+  return 0;
+}
+
 #endif

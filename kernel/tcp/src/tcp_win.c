@@ -491,4 +491,134 @@ ak_tcp_error_t ak_tcp_map_error(int platform_errno) {
   }
 }
 
+int ak_tcp_socket_connect(ak_socket_fd_t fd, const char *host, uint16_t port,
+                          uint32_t timeout_ms, const char **error) {
+  if (!host) {
+    if (error) {
+      *error = "Host is required";
+    }
+    return -1;
+  }
+
+  struct addrinfo hints, *result, *rp;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+
+  char port_str[16];
+  snprintf(port_str, sizeof(port_str), "%u", port);
+
+  int gai_result = getaddrinfo(host, port_str, &hints, &result);
+  if (gai_result != 0) {
+    if (error) {
+      *error = gai_strerror(gai_result);
+    }
+    return -1;
+  }
+
+  bool was_blocking = true;
+  if (timeout_ms > 0) {
+    if (ak_tcp_socket_set_nonblocking(fd, true, error) != 0) {
+      freeaddrinfo(result);
+      return -1;
+    }
+    was_blocking = false;
+  }
+
+  int connect_result = -1;
+  for (rp = result; rp != NULL; rp = rp->ai_next) {
+    connect_result = connect(fd, rp->ai_addr, (int)rp->ai_addrlen);
+
+    if (connect_result == 0) {
+      break;
+    }
+
+    int wsa_err = WSAGetLastError();
+    if (wsa_err == WSAEWOULDBLOCK && timeout_ms > 0) {
+      fd_set write_fds, except_fds;
+      FD_ZERO(&write_fds);
+      FD_ZERO(&except_fds);
+      FD_SET(fd, &write_fds);
+      FD_SET(fd, &except_fds);
+
+      struct timeval tv;
+      tv.tv_sec = timeout_ms / 1000;
+      tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+      int select_result = select(0, NULL, &write_fds, &except_fds, &tv);
+      if (select_result == SOCKET_ERROR) {
+        if (error) {
+          *error = wsa_error_string(WSAGetLastError());
+        }
+        freeaddrinfo(result);
+        if (!was_blocking) {
+          ak_tcp_socket_set_nonblocking(fd, false, NULL);
+        }
+        return -1;
+      }
+      if (select_result == 0) {
+        if (error) {
+          *error = "Connection timed out";
+        }
+        freeaddrinfo(result);
+        if (!was_blocking) {
+          ak_tcp_socket_set_nonblocking(fd, false, NULL);
+        }
+        return -1;
+      }
+
+      if (FD_ISSET(fd, &except_fds)) {
+        if (error) {
+          *error = "Connection failed";
+        }
+        freeaddrinfo(result);
+        if (!was_blocking) {
+          ak_tcp_socket_set_nonblocking(fd, false, NULL);
+        }
+        return -1;
+      }
+
+      if (FD_ISSET(fd, &write_fds)) {
+        int so_error = 0;
+        int len = sizeof(so_error);
+        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&so_error, &len) ==
+            SOCKET_ERROR) {
+          if (error) {
+            *error = wsa_error_string(WSAGetLastError());
+          }
+          freeaddrinfo(result);
+          if (!was_blocking) {
+            ak_tcp_socket_set_nonblocking(fd, false, NULL);
+          }
+          return -1;
+        }
+
+        if (so_error == 0) {
+          connect_result = 0;
+          break;
+        }
+
+        if (error) {
+          *error = wsa_error_string(so_error);
+        }
+      }
+    }
+  }
+
+  freeaddrinfo(result);
+
+  if (!was_blocking) {
+    ak_tcp_socket_set_nonblocking(fd, false, NULL);
+  }
+
+  if (connect_result != 0) {
+    if (error && !*error) {
+      *error = wsa_error_string(WSAGetLastError());
+    }
+    return -1;
+  }
+
+  return 0;
+}
+
 #endif

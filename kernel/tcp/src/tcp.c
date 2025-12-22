@@ -189,6 +189,33 @@ void ak_tcp_ctx_free(ak_tcp_ctx_t *ctx) {
   AK24_FREE(ctx);
 }
 
+ak_tcp_ctx_t *ak_tcp_ctx_detach(ak_tcp_ctx_t *ctx) {
+  if (!ctx) {
+    return NULL;
+  }
+  AK24_MUTEX_LOCK(&ctx->mutex);
+  ctx->detached = true;
+  AK24_MUTEX_UNLOCK(&ctx->mutex);
+  return ctx;
+}
+
+bool ak_tcp_ctx_is_detached(ak_tcp_ctx_t *ctx) {
+  if (!ctx) {
+    return false;
+  }
+  AK24_MUTEX_LOCK(&ctx->mutex);
+  bool d = ctx->detached;
+  AK24_MUTEX_UNLOCK(&ctx->mutex);
+  return d;
+}
+
+ak_socket_fd_t ak_tcp_ctx_fd(ak_tcp_ctx_t *ctx) {
+  if (!ctx) {
+    return AK_INVALID_SOCKET;
+  }
+  return ctx->socket_fd;
+}
+
 ssize_t ak_tcp_send(ak_tcp_ctx_t *ctx, const ak_buffer_t *data,
                     const char **error) {
   if (!ctx || !data) {
@@ -838,22 +865,38 @@ static void worker_task_fn(void *captured, void *args) {
     ak_lambda_invoke(server->on_handle, ctx);
   }
 
-  if (server->on_disconnect) {
-    ak_lambda_invoke(server->on_disconnect, ctx);
+  bool detached = ak_tcp_ctx_is_detached(ctx);
+
+  if (!detached) {
+    if (server->on_disconnect) {
+      ak_lambda_invoke(server->on_disconnect, ctx);
+    }
+
+    ip_tracker_decrement(server, ctx->remote_ip);
+
+    AK24_MUTEX_LOCK(&server->mutex);
+    if (server->active_connections > 0) {
+      server->active_connections--;
+    }
+    if (server->draining && server->active_connections == 0) {
+      AK24_COND_SIGNAL(&server->shutdown_cond);
+    }
+    AK24_MUTEX_UNLOCK(&server->mutex);
+
+    ak_tcp_ctx_free(ctx);
+  } else {
+    ip_tracker_decrement(server, ctx->remote_ip);
+
+    AK24_MUTEX_LOCK(&server->mutex);
+    if (server->active_connections > 0) {
+      server->active_connections--;
+    }
+    if (server->draining && server->active_connections == 0) {
+      AK24_COND_SIGNAL(&server->shutdown_cond);
+    }
+    AK24_MUTEX_UNLOCK(&server->mutex);
   }
 
-  ip_tracker_decrement(server, ctx->remote_ip);
-
-  AK24_MUTEX_LOCK(&server->mutex);
-  if (server->active_connections > 0) {
-    server->active_connections--;
-  }
-  if (server->draining && server->active_connections == 0) {
-    AK24_COND_SIGNAL(&server->shutdown_cond);
-  }
-  AK24_MUTEX_UNLOCK(&server->mutex);
-
-  ak_tcp_ctx_free(ctx);
   AK24_FREE(task);
 }
 

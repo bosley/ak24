@@ -19,6 +19,15 @@
 extern "C" {
 #endif
 
+#ifdef _WIN32
+#include <winsock2.h>
+typedef SOCKET ak_socket_fd_t;
+#define AK_INVALID_SOCKET INVALID_SOCKET
+#else
+typedef int ak_socket_fd_t;
+#define AK_INVALID_SOCKET -1
+#endif
+
 typedef struct ak_tcp_ctx_s ak_tcp_ctx_t;
 typedef struct ak_tcp_server_s ak_tcp_server_t;
 typedef struct ak_tcp_client_s ak_tcp_client_t;

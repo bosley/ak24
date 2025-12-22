@@ -280,3 +280,43 @@ ifeq ($(AK24_ASAN_ENABLED),1)
     LDFLAGS += $(AK24_ASAN_FLAGS)
 endif
 ```
+
+## TCP Module Testing
+
+The TCP module includes specialized stress testing to validate connection handling, data integrity, and the detachment API.
+
+### Stress Test Tool
+
+```bash
+./tools/run_tcp_stress.sh <chunks> <chunk_size> <clients>
+```
+
+**Purpose:** Validates internal TCP mechanics—not benchmarking. The tool verifies:
+- Connection acceptance and teardown
+- Data integrity via hash comparison (client and server must match)
+- Thread pool behavior under load
+- Graceful shutdown with active connections
+
+**Example:**
+```bash
+./tools/run_tcp_stress.sh 1000 40960 10
+# 10 clients, each sending 1000 chunks of 40KB
+```
+
+### Event Loop Example (Detachment Testing)
+
+The `tcp-server-example` demonstrates `ak_tcp_ctx_detach()`:
+
+1. `on_handle` reads a 4-byte client ID
+2. Calls `ak_tcp_ctx_detach(ctx)` to take ownership
+3. Registers the connection with a single-threaded event loop
+4. Worker thread returns to pool immediately
+5. Event loop processes all detached connections
+
+This pattern validates:
+- Detachment transfers ownership correctly
+- Framework skips cleanup for detached contexts
+- `ak_tcp_ctx_free()` works for caller-managed connections
+- No data loss when switching from worker thread to event loop
+
+**Key insight:** The event loop pattern trades throughput for connection density. It's optimal for many idle connections (chat, presence, notifications), not bulk streaming. The stress test intentionally uses high-throughput streaming to stress both patterns.

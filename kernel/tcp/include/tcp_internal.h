@@ -20,11 +20,6 @@
 #ifdef AK24_PLATFORM_WINDOWS
 #include <winsock2.h>
 #include <ws2tcpip.h>
-typedef SOCKET ak_socket_fd_t;
-#define AK_INVALID_SOCKET INVALID_SOCKET
-#else
-typedef int ak_socket_fd_t;
-#define AK_INVALID_SOCKET -1
 #endif
 
 #if AK24_TLS_ENABLED
@@ -56,6 +51,8 @@ struct ak_tcp_ctx_s {
   // Backpressure tracking (Feature 1)
   size_t buffered_bytes;        /**< Current bytes buffered (backpressure) */
   size_t max_recv_buffer_bytes; /**< Limit copied from server config */
+
+  bool detached; /**< If true, framework skips cleanup on handler return */
 
 #if AK24_TLS_ENABLED
   SSL *ssl; /**< OpenSSL connection state (NULL if plaintext) */

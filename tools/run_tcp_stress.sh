@@ -13,9 +13,9 @@ STRESSOR_BIN="$BIN_DIR/tcp-client-stressor"
 SERVER_LOG="/tmp/ak24_tcp_server.log"
 CLIENT_LOG="/tmp/ak24_tcp_client.log"
 
-NUM_CHUNKS="${1:-65535}"
-CHUNK_SIZE="${2:-65536}"
-PARALLELISM="${3:-42}"
+NUM_CHUNKS="${1:-100}"
+CHUNK_SIZE="${2:-4096}"
+PARALLELISM="${3:-10}"
 PORT="${4:-9999}"
 
 cleanup() {

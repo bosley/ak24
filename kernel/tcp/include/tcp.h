@@ -375,6 +375,49 @@ ak_tcp_error_t ak_tcp_recv_until_ex(ak_tcp_ctx_t *ctx, const char *delim,
                                     size_t max_bytes, ak_buffer_t **result,
                                     const char **error);
 
+// Connection detachment (opt-in ownership transfer)
+/**
+ * @brief Detach connection from framework management
+ *
+ * After this call:
+ *   - on_disconnect will NOT be called
+ *   - Framework will NOT close the socket
+ *   - Framework will NOT free the ctx
+ *   - Caller is responsible for ak_tcp_ctx_free() when done
+ *
+ * @param ctx Connection context
+ * @return ctx for chaining convenience, NULL if ctx was NULL
+ */
+ak_tcp_ctx_t *ak_tcp_ctx_detach(ak_tcp_ctx_t *ctx);
+
+/**
+ * @brief Check if connection is detached
+ *
+ * @param ctx Connection context
+ * @return true if detached, false otherwise
+ */
+bool ak_tcp_ctx_is_detached(ak_tcp_ctx_t *ctx);
+
+/**
+ * @brief Get raw file descriptor for event loop registration
+ *
+ * Valid for detached connections. Use for registering with epoll/kqueue/etc.
+ *
+ * @param ctx Connection context
+ * @return Socket file descriptor, AK_INVALID_SOCKET if ctx is NULL
+ */
+ak_socket_fd_t ak_tcp_ctx_fd(ak_tcp_ctx_t *ctx);
+
+/**
+ * @brief Free a detached connection context
+ *
+ * Call this to clean up a detached connection when done.
+ * For non-detached connections, the framework handles cleanup automatically.
+ *
+ * @param ctx Connection context
+ */
+void ak_tcp_ctx_free(ak_tcp_ctx_t *ctx);
+
 // Initialization/Deinit (called by ak_kernel_init/deinit)
 /**
  * @brief Initialize TCP subsystem

@@ -25,6 +25,63 @@ if(AK24_GC_ENABLED)
     endif()
 endif()
 
+find_library(TCC_LIBRARY NAMES tcc libtcc)
+find_path(TCC_INCLUDE_DIR NAMES libtcc.h)
+
+if(TCC_LIBRARY AND TCC_INCLUDE_DIR)
+    message(STATUS "TCC: FOUND (system)")
+    message(STATUS "  - Library: ${TCC_LIBRARY}")
+    message(STATUS "  - Include: ${TCC_INCLUDE_DIR}")
+else()
+    message(STATUS "TCC: NOT FOUND (fetching from source)")
+
+    FetchContent_Declare(
+        tcc
+        GIT_REPOSITORY https://github.com/AK24org/tcc.git
+        GIT_TAG main
+    )
+
+    FetchContent_GetProperties(tcc)
+    if(NOT tcc_POPULATED)
+        FetchContent_Populate(tcc)
+
+        set(TCC_SOURCE_DIR ${tcc_SOURCE_DIR})
+        set(TCC_BINARY_DIR ${tcc_BINARY_DIR})
+
+        if(UNIX OR APPLE)
+            execute_process(
+                COMMAND ${TCC_SOURCE_DIR}/configure
+                    --prefix=${TCC_BINARY_DIR}/install
+                    --enable-static
+                WORKING_DIRECTORY ${TCC_BINARY_DIR}
+                RESULT_VARIABLE TCC_CONFIGURE_RESULT
+            )
+
+            if(TCC_CONFIGURE_RESULT EQUAL 0)
+                execute_process(
+                    COMMAND make -j4
+                    WORKING_DIRECTORY ${TCC_BINARY_DIR}
+                    RESULT_VARIABLE TCC_BUILD_RESULT
+                )
+
+                if(TCC_BUILD_RESULT EQUAL 0)
+                    set(TCC_LIBRARY ${TCC_BINARY_DIR}/libtcc.a)
+                    set(TCC_INCLUDE_DIR ${TCC_SOURCE_DIR})
+                    message(STATUS "TCC: BUILT from source")
+                    message(STATUS "  - Library: ${TCC_LIBRARY}")
+                    message(STATUS "  - Include: ${TCC_INCLUDE_DIR}")
+                else()
+                    message(FATAL_ERROR "TCC: build failed - CJIT requires TCC")
+                endif()
+            else()
+                message(FATAL_ERROR "TCC: configure failed - CJIT requires TCC")
+            endif()
+        else()
+            message(FATAL_ERROR "TCC: Windows build from source not yet supported - CJIT requires TCC")
+        endif()
+    endif()
+endif()
+
 find_package(OpenSSL QUIET)
 if(OPENSSL_FOUND)
     set(AK24_TLS_ENABLED ON CACHE BOOL "TLS support enabled" FORCE)
@@ -100,6 +157,9 @@ else()
     list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/nogc.c)
 endif()
 
+# Add CJIT sources
+list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/cjit/src/cjit.c)
+
 file(GLOB_RECURSE KERNEL_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/map/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/buffer/test/*.c
@@ -137,6 +197,7 @@ file(GLOB_RECURSE KERNEL_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tcp/include/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/cjit/include/*.h
 )
 
 # Add TCP subdirectory (for tests only - sources are compiled into kernel)
@@ -172,6 +233,7 @@ target_include_directories(ak24_kernel PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/include
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include
     ${CMAKE_CURRENT_SOURCE_DIR}/tcp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/cjit/include
     ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include
 )
 
@@ -184,6 +246,9 @@ if(AK24_GC_ENABLED)
         )
     endif()
 endif()
+
+target_include_directories(ak24_kernel PRIVATE ${TCC_INCLUDE_DIR})
+target_link_libraries(ak24_kernel PUBLIC ${TCC_LIBRARY})
 
 if(AK24_TLS_ENABLED)
     target_compile_definitions(ak24_kernel PUBLIC AK24_TLS_ENABLED=1)
@@ -240,6 +305,7 @@ file(GLOB_RECURSE ALL_COMPILE_TIME_TESTS
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/cjit/test/*.c
 )
 
 file(GLOB BUFFER_TEST_SOURCES
@@ -304,6 +370,7 @@ list(REMOVE_ITEM ALL_COMPILE_TIME_TESTS
     ${BUFFER_TEST_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/scanner_test_runner.c
     ${SCANNER_TEST_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/cjit/test/extended_tests.c
 )
 
 foreach(TEST_FILE ${ALL_COMPILE_TIME_TESTS})
@@ -383,6 +450,7 @@ install(DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/tcp/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/cjit/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include/
     DESTINATION include/ak24
     FILES_MATCHING PATTERN "*.h"

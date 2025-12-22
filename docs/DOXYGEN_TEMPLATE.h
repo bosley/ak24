@@ -20,7 +20,7 @@
 
 #include <stddef.h>
 
-#define AK24_MODULE_VERSION "0.1.1-dev"
+#define AK24_MODULE_VERSION "0.1.2-dev"
 
 /**
  * @brief Brief description of this structure

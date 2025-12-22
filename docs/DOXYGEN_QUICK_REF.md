@@ -91,7 +91,7 @@ int count;      /**< Number of items */
  *
  * if (stack_push(s, value) != 0) {
  *   fprintf(stderr, "Push failed\n");
- *   free(value);
+ *   AK24_FREE(value);
  * }
  * @endcode
  *

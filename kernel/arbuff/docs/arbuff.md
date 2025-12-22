@@ -37,7 +37,7 @@ The arbuff uses a sequence-based lock-free algorithm with proper memory barriers
 ```c
 void *producer_thread(void *arg) {
   ak_arbuff_t *arbuff = (ak_arbuff_t *)arg;
-  int *data = malloc(sizeof(int));
+  int *data = AK24_MALLOC(sizeof(int));
   *data = 42;
 
   while (ak_arbuff_push(arbuff, data) != 0) {
@@ -51,7 +51,7 @@ void *consumer_thread(void *arg) {
   void *item = ak_arbuff_pop(arbuff);
   if (item) {
     process(item);
-    free(item);
+    AK24_FREE(item);
   }
   return NULL;
 }

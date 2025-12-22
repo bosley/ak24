@@ -1,5 +1,5 @@
 PROJECT_NAME           = "AK24 Kernel"
-PROJECT_NUMBER         = "0.1.0-dev"
+PROJECT_NUMBER         = "0.1.1-dev"
 PROJECT_BRIEF          = "AK24 - Application Kernel 24, Core Runtime Library"
 PROJECT_LOGO           = assets/ak24-logo-small-dark.svg
 

@@ -124,6 +124,7 @@ if(AK24_BUILD_DOCS)
 endif()
 
 add_subdirectory(kernel)
+add_subdirectory(apps)
 
 add_subdirectory(examples/ak24-cli)
 add_subdirectory(examples/arena-demo)

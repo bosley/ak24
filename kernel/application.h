@@ -50,7 +50,8 @@
  * Provides access to command-line arguments and shutdown information.
  */
 typedef struct {
-  list_str_t args; /**< Command-line arguments */
+  list_str_t args;          /**< Command-line arguments (log flags removed) */
+  ak_log_level_t log_level; /**< Parsed log level from -l/--log-level */
   kernel_shutdown_info_t
       *shutdown_info; /**< Shutdown info (NULL until shutdown) */
 } ak_app_context_t;
@@ -201,12 +202,36 @@ typedef struct {
     list_deinit(&ctx->args);                                                   \
   }                                                                            \
                                                                                \
-  static list_str_t __ak_process_args(int argc, char **argv) {                 \
+  static list_str_t __ak_process_args(int argc, char **argv,                   \
+                                      ak_log_level_t *out_log_level) {         \
     list_str_t processed_args;                                                 \
     list_init(&processed_args);                                                \
                                                                                \
+    *out_log_level = AK24_LOG_LEVEL_INFO; /* Default */                        \
+                                                                               \
     for (int i = 0; i < argc; i++) {                                           \
-      list_push(&processed_args, argv[i]);                                     \
+      if ((strcmp(argv[i], "-l") == 0 ||                                       \
+           strcmp(argv[i], "--log-level") == 0) &&                             \
+          i + 1 < argc) {                                                      \
+        /* Parse log level */                                                  \
+        const char *level_str = argv[i + 1];                                   \
+        if (strcmp(level_str, "trace") == 0) {                                 \
+          *out_log_level = AK24_LOG_LEVEL_TRACE;                               \
+        } else if (strcmp(level_str, "debug") == 0) {                          \
+          *out_log_level = AK24_LOG_LEVEL_DEBUG;                               \
+        } else if (strcmp(level_str, "info") == 0) {                           \
+          *out_log_level = AK24_LOG_LEVEL_INFO;                                \
+        } else if (strcmp(level_str, "warn") == 0) {                           \
+          *out_log_level = AK24_LOG_LEVEL_WARN;                                \
+        } else if (strcmp(level_str, "error") == 0) {                          \
+          *out_log_level = AK24_LOG_LEVEL_ERROR;                               \
+        } else if (strcmp(level_str, "fatal") == 0) {                          \
+          *out_log_level = AK24_LOG_LEVEL_FATAL;                               \
+        }                                                                      \
+        i++; /* Skip next arg (the level value) */                             \
+      } else {                                                                 \
+        list_push(&processed_args, argv[i]);                                   \
+      }                                                                        \
     }                                                                          \
                                                                                \
     return processed_args;                                                     \
@@ -215,8 +240,12 @@ typedef struct {
   int main(int argc, char **argv) {                                            \
     ak_kernel_init(app_id_str);                                                \
                                                                                \
-    __ak_app_ctx.args = __ak_process_args(argc, argv);                         \
+    ak_log_level_t log_level;                                                  \
+    __ak_app_ctx.args = __ak_process_args(argc, argv, &log_level);             \
+    __ak_app_ctx.log_level = log_level;                                        \
     __ak_app_ctx.shutdown_info = NULL;                                         \
+                                                                               \
+    ak_log_set_level(log_level);                                               \
                                                                                \
     ak_lambda_t *shutdown_lambda =                                             \
         ak_lambda_new(__ak_internal_shutdown_handler, &__ak_app_ctx, NULL);    \

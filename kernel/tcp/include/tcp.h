@@ -321,6 +321,16 @@ void ak_tcp_shutdown(ak_tcp_ctx_t *ctx);
  */
 void ak_tcp_abort(ak_tcp_ctx_t *ctx);
 
+/**
+ * @brief Mark bytes as consumed (reduce backpressure counter)
+ *
+ * Call this after processing received data to allow more data to be received.
+ *
+ * @param ctx Connection context
+ * @param bytes Number of bytes consumed
+ */
+void ak_tcp_consume_bytes(ak_tcp_ctx_t *ctx, size_t bytes);
+
 // Server stats
 /**
  * @brief Server statistics

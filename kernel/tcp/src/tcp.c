@@ -269,11 +269,28 @@ ssize_t ak_tcp_recv(ak_tcp_ctx_t *ctx, ak_buffer_t *buffer, size_t max_bytes,
     return -1;
   }
   ak_socket_fd_t fd = ctx->socket_fd;
+
+  size_t limit = ctx->max_recv_buffer_bytes;
+  size_t buffered = ctx->buffered_bytes;
   AK24_MUTEX_UNLOCK(&ctx->mutex);
 
-  uint8_t temp[TCP_RECV_CHUNK_SIZE];
   size_t to_recv =
       max_bytes < TCP_RECV_CHUNK_SIZE ? max_bytes : TCP_RECV_CHUNK_SIZE;
+
+  if (limit > 0) {
+    if (buffered >= limit) {
+      if (error) {
+        *error = "Receive buffer full (backpressure limit)";
+      }
+      return -2;
+    }
+    size_t remaining = limit - buffered;
+    if (to_recv > remaining) {
+      to_recv = remaining;
+    }
+  }
+
+  uint8_t temp[TCP_RECV_CHUNK_SIZE];
 
 #if AK24_TLS_ENABLED
   AK24_MUTEX_LOCK(&ctx->mutex);
@@ -307,6 +324,10 @@ ssize_t ak_tcp_recv(ak_tcp_ctx_t *ctx, ak_buffer_t *buffer, size_t max_bytes,
     }
     return -1;
   }
+
+  AK24_MUTEX_LOCK(&ctx->mutex);
+  ctx->buffered_bytes += (size_t)received;
+  AK24_MUTEX_UNLOCK(&ctx->mutex);
 
   return received;
 }
@@ -363,16 +384,33 @@ ak_buffer_t *ak_tcp_recv_until(ak_tcp_ctx_t *ctx, const char *delim,
       break;
     }
     ak_socket_fd_t fd = ctx->socket_fd;
+    size_t limit = ctx->max_recv_buffer_bytes;
+    size_t buffered = ctx->buffered_bytes;
 #if AK24_TLS_ENABLED
     SSL *ssl = ctx->ssl;
 #endif
     AK24_MUTEX_UNLOCK(&ctx->mutex);
+
+    if (limit > 0 && buffered >= limit) {
+      if (error) {
+        *error = "Receive buffer full (backpressure limit)";
+      }
+      ak_buffer_free(result);
+      return NULL;
+    }
 
     size_t to_read = TCP_RECV_CHUNK_SIZE;
     if (max_bytes > 0 && count + to_read > max_bytes) {
       to_read = max_bytes - count;
       if (to_read == 0) {
         to_read = 1;
+      }
+    }
+
+    if (limit > 0) {
+      size_t remaining = limit - buffered;
+      if (to_read > remaining) {
+        to_read = remaining;
       }
     }
 
@@ -405,6 +443,10 @@ ak_buffer_t *ak_tcp_recv_until(ak_tcp_ctx_t *ctx, const char *delim,
       ak_buffer_free(result);
       return NULL;
     }
+
+    AK24_MUTEX_LOCK(&ctx->mutex);
+    ctx->buffered_bytes += (size_t)received;
+    AK24_MUTEX_UNLOCK(&ctx->mutex);
   }
 
   if (ak_buffer_count(result) == 0) {
@@ -580,6 +622,19 @@ void ak_tcp_shutdown(ak_tcp_ctx_t *ctx) {
 
 void ak_tcp_abort(ak_tcp_ctx_t *ctx) { ak_tcp_close(ctx); }
 
+void ak_tcp_consume_bytes(ak_tcp_ctx_t *ctx, size_t bytes) {
+  if (!ctx) {
+    return;
+  }
+  AK24_MUTEX_LOCK(&ctx->mutex);
+  if (bytes > ctx->buffered_bytes) {
+    ctx->buffered_bytes = 0;
+  } else {
+    ctx->buffered_bytes -= bytes;
+  }
+  AK24_MUTEX_UNLOCK(&ctx->mutex);
+}
+
 ak_tcp_error_t ak_tcp_send_ex(ak_tcp_ctx_t *ctx, const ak_buffer_t *data,
                               size_t *bytes_sent, const char **error) {
   if (bytes_sent) {
@@ -611,6 +666,9 @@ ak_tcp_error_t ak_tcp_recv_ex(ak_tcp_ctx_t *ctx, ak_buffer_t *buffer,
   }
 
   ssize_t result = ak_tcp_recv(ctx, buffer, max_bytes, error);
+  if (result == -2) {
+    return AK_TCP_ERR_BUFFER_FULL;
+  }
   if (result < 0) {
     if (!ctx) {
       return AK_TCP_ERR_INVALID;
@@ -993,6 +1051,8 @@ static void *accept_loop(void *arg) {
 
     ctx->recv_timeout_ms = server->default_recv_timeout_ms;
     ctx->send_timeout_ms = server->default_send_timeout_ms;
+    ctx->max_recv_buffer_bytes = server->max_recv_buffer_bytes;
+    ctx->buffered_bytes = 0;
 
     AK24_MUTEX_LOCK(&server->mutex);
     server->active_connections++;

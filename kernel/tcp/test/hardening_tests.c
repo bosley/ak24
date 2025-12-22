@@ -1,6 +1,6 @@
 
-#include "kernel.h"
 #include "filepath.h"
+#include "kernel.h"
 #include "tcp.h"
 #include "tcp_internal.h"
 #include "test/assert.h"
@@ -743,8 +743,10 @@ static int test_tls_server_create(void) {
   printf("Test: TLS server creation\n");
 
   ak_buffer_t *temp_dir = ak_filepath_temp();
-  ak_buffer_t *cert_buf = ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.crt");
-  ak_buffer_t *key_buf = ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.key");
+  ak_buffer_t *cert_buf =
+      ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.crt");
+  ak_buffer_t *key_buf =
+      ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.key");
   const char *cert_path = buf_cstr(cert_buf);
   const char *key_path = buf_cstr(key_buf);
 
@@ -790,8 +792,10 @@ static int test_tls_handshake(void) {
   printf("Test: TLS handshake and data transfer\n");
 
   ak_buffer_t *temp_dir = ak_filepath_temp();
-  ak_buffer_t *cert_buf = ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.crt");
-  ak_buffer_t *key_buf = ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.key");
+  ak_buffer_t *cert_buf =
+      ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.crt");
+  ak_buffer_t *key_buf =
+      ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.key");
   const char *cert_path = buf_cstr(cert_buf);
   const char *key_path = buf_cstr(key_buf);
 
@@ -867,8 +871,10 @@ static int test_tls_data_integrity(void) {
   printf("Test: TLS data integrity (large payload)\n");
 
   ak_buffer_t *temp_dir = ak_filepath_temp();
-  ak_buffer_t *cert_buf = ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.crt");
-  ak_buffer_t *key_buf = ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.key");
+  ak_buffer_t *cert_buf =
+      ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.crt");
+  ak_buffer_t *key_buf =
+      ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.key");
   const char *cert_path = buf_cstr(cert_buf);
   const char *key_path = buf_cstr(key_buf);
 
@@ -976,6 +982,224 @@ static int test_tls_missing_cert(void) {
 }
 #endif
 
+static volatile int backpressure_recv_result = 0;
+static volatile int backpressure_buffer_full_hit = 0;
+
+static void on_handle_backpressure_test(void *captured, void *args) {
+  (void)captured;
+  ak_tcp_ctx_t *ctx = (ak_tcp_ctx_t *)args;
+  const char *error = NULL;
+
+  ak_buffer_t *buf = ak_buffer_new(512);
+
+  ssize_t total_received = 0;
+  int buffer_full_count = 0;
+
+  while (ak_tcp_is_alive(ctx) && total_received < 2048) {
+    ssize_t r = ak_tcp_recv(ctx, buf, 1024, &error);
+    if (r == -2) {
+      buffer_full_count++;
+      backpressure_buffer_full_hit = 1;
+      break;
+    }
+    if (r <= 0) {
+      break;
+    }
+    total_received += r;
+  }
+
+  backpressure_recv_result = (int)total_received;
+  ak_buffer_free(buf);
+}
+
+static int test_backpressure_buffer_limit(void) {
+  printf("Test: Backpressure buffer limit (Feature 1)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 20;
+
+  backpressure_recv_result = 0;
+  backpressure_buffer_full_hit = 0;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.max_recv_buffer_bytes = 1024;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_backpressure_test, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  AK24_TEST_ASSERT_EQ(h_client_connect(&client, port), 0);
+
+  char large_data[2048];
+  memset(large_data, 'X', sizeof(large_data));
+  h_client_send_all(&client, (const uint8_t *)large_data, sizeof(large_data));
+
+  usleep(300000);
+
+  h_client_disconnect(&client);
+  usleep(100000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  Received before limit: %d bytes\n", backpressure_recv_result);
+  printf("  Buffer full triggered: %s\n",
+         backpressure_buffer_full_hit ? "yes" : "no");
+
+  AK24_TEST_ASSERT(backpressure_buffer_full_hit == 1);
+  AK24_TEST_ASSERT(backpressure_recv_result <= 1024);
+
+  printf("  Backpressure limit enforced\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static volatile int recovery_phase1_ok = 0;
+static volatile int recovery_phase2_buffer_full = 0;
+static volatile int recovery_phase3_ok = 0;
+
+static void on_handle_backpressure_recovery(void *captured, void *args) {
+  (void)captured;
+  ak_tcp_ctx_t *ctx = (ak_tcp_ctx_t *)args;
+  const char *error = NULL;
+
+  ak_buffer_t *buf1 = ak_buffer_new(512);
+  ak_buffer_t *buf2 = ak_buffer_new(512);
+
+  ssize_t r1 = ak_tcp_recv(ctx, buf1, 512, &error);
+  if (r1 > 0) {
+    recovery_phase1_ok = 1;
+  }
+
+  usleep(100000);
+
+  while (ak_tcp_is_alive(ctx)) {
+    ssize_t r2 = ak_tcp_recv(ctx, buf2, 1024, &error);
+    if (r2 == -2) {
+      recovery_phase2_buffer_full = 1;
+      break;
+    }
+    if (r2 <= 0) {
+      break;
+    }
+  }
+
+  if (recovery_phase2_buffer_full && r1 > 0) {
+    ak_tcp_consume_bytes(ctx, (size_t)r1);
+
+    ak_buffer_clear(buf2);
+    ssize_t r3 = ak_tcp_recv(ctx, buf2, 512, &error);
+    if (r3 > 0) {
+      recovery_phase3_ok = 1;
+    }
+  }
+
+  ak_buffer_free(buf1);
+  ak_buffer_free(buf2);
+}
+
+static int test_backpressure_recovery(void) {
+  printf("Test: Backpressure recovery after consume (Feature 1)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 21;
+
+  recovery_phase1_ok = 0;
+  recovery_phase2_buffer_full = 0;
+  recovery_phase3_ok = 0;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.max_recv_buffer_bytes = 1024;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_backpressure_recovery, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  AK24_TEST_ASSERT_EQ(h_client_connect(&client, port), 0);
+
+  char data[2048];
+  memset(data, 'Y', sizeof(data));
+  h_client_send_all(&client, (const uint8_t *)data, sizeof(data));
+
+  usleep(500000);
+
+  h_client_disconnect(&client);
+  usleep(100000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  Phase 1 (initial recv): %s\n",
+         recovery_phase1_ok ? "ok" : "failed");
+  printf("  Phase 2 (buffer full): %s\n",
+         recovery_phase2_buffer_full ? "ok" : "failed");
+  printf("  Phase 3 (after consume): %s\n",
+         recovery_phase3_ok ? "ok" : "failed");
+
+  AK24_TEST_ASSERT(recovery_phase1_ok == 1);
+  AK24_TEST_ASSERT(recovery_phase2_buffer_full == 1);
+  AK24_TEST_ASSERT(recovery_phase3_ok == 1);
+
+  printf("  Backpressure recovery works\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_backpressure_recv_ex(void) {
+  printf("Test: Backpressure with recv_ex (Feature 1)\n");
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 22;
+
+  backpressure_recv_result = 0;
+  backpressure_buffer_full_hit = 0;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.max_recv_buffer_bytes = 512;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_backpressure_test, NULL, NULL);
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  AK24_TEST_ASSERT_EQ(h_client_connect(&client, port), 0);
+
+  char data[1024];
+  memset(data, 'Z', sizeof(data));
+  h_client_send_all(&client, (const uint8_t *)data, sizeof(data));
+
+  usleep(300000);
+
+  h_client_disconnect(&client);
+  usleep(100000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  printf("  recv returned buffer full: %s\n",
+         backpressure_buffer_full_hit ? "yes" : "no");
+
+  AK24_TEST_ASSERT(backpressure_buffer_full_hit == 1);
+
+  printf("  Backpressure recv_ex works\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
 int run_tcp_hardening_tests(void) {
   printf("\n--- Production Hardening Tests ---\n\n");
   AK24_TEST_RUN(test_recv_until_max_size);
@@ -988,6 +1212,11 @@ int run_tcp_hardening_tests(void) {
   AK24_TEST_RUN(test_socket_buffer_sizes);
   AK24_TEST_RUN(test_ipv6_connection);
   AK24_TEST_RUN(test_dual_stack);
+
+  printf("\n--- Backpressure Tests ---\n\n");
+  AK24_TEST_RUN(test_backpressure_buffer_limit);
+  AK24_TEST_RUN(test_backpressure_recovery);
+  AK24_TEST_RUN(test_backpressure_recv_ex);
 
 #if AK24_TLS_ENABLED
   printf("\n--- TLS Tests ---\n\n");

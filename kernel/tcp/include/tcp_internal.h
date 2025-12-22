@@ -53,6 +53,10 @@ struct ak_tcp_ctx_s {
   uint32_t recv_timeout_ms; /**< Receive timeout */
   uint32_t send_timeout_ms; /**< Send timeout */
 
+  // Backpressure tracking (Feature 1)
+  size_t buffered_bytes;        /**< Current bytes buffered (backpressure) */
+  size_t max_recv_buffer_bytes; /**< Limit copied from server config */
+
 #if AK24_TLS_ENABLED
   SSL *ssl; /**< OpenSSL connection state (NULL if plaintext) */
 #endif

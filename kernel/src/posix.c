@@ -1,7 +1,9 @@
 #include "kernel.h"
 #include "thread_platform.h"
+#include <errno.h>
 #include <pthread.h>
 #include <signal.h>
+#include <time.h>
 
 #ifdef AK24_PLATFORM_POSIX
 
@@ -198,6 +200,30 @@ int AK24_cond_wait(AK24_COND *cond, AK24_MUTEX *mutex) {
     return -1;
   }
   return pthread_cond_wait(&cond->handle, &mutex->handle);
+}
+
+int AK24_cond_timedwait(AK24_COND *cond, AK24_MUTEX *mutex,
+                        uint32_t timeout_ms) {
+  if (!cond || !mutex) {
+    return -1;
+  }
+
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  ts.tv_sec += timeout_ms / 1000;
+  ts.tv_nsec += (timeout_ms % 1000) * 1000000;
+  if (ts.tv_nsec >= 1000000000) {
+    ts.tv_sec++;
+    ts.tv_nsec -= 1000000000;
+  }
+
+  int result = pthread_cond_timedwait(&cond->handle, &mutex->handle, &ts);
+  if (result == 0) {
+    return 0; // Signaled
+  } else if (result == ETIMEDOUT) {
+    return 1; // Timeout
+  }
+  return -1; // Error
 }
 
 int AK24_cond_signal(AK24_COND *cond) {

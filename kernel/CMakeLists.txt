@@ -1,6 +1,6 @@
-if(AK24_GC_ENABLED)
-    include(FetchContent)
+include(FetchContent)
 
+if(AK24_GC_ENABLED)
     FetchContent_Declare(
         bdwgc
         GIT_REPOSITORY https://github.com/ivmai/bdwgc.git
@@ -25,6 +25,18 @@ if(AK24_GC_ENABLED)
     endif()
 endif()
 
+find_package(OpenSSL QUIET)
+if(OPENSSL_FOUND)
+    set(AK24_TLS_ENABLED ON CACHE BOOL "TLS support enabled" FORCE)
+    message(STATUS "OpenSSL: FOUND (version ${OPENSSL_VERSION})")
+    message(STATUS "  - TLS/SSL support: ENABLED")
+else()
+    set(AK24_TLS_ENABLED OFF CACHE BOOL "TLS support disabled" FORCE)
+    message(STATUS "OpenSSL: NOT FOUND")
+    message(STATUS "  - TLS/SSL support: DISABLED")
+    message(STATUS "  - Install OpenSSL to enable TLS (e.g., brew install openssl)")
+endif()
+
 file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/map/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/buffer/src/*.c
@@ -44,6 +56,12 @@ file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/src/*.c
 )
 
+# Add TCP sources (platform-specific handled below)
+list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tcp/src/tcp.c)
+
+# Add TLS support (compiled in when OpenSSL found, code is #ifdef guarded)
+list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tcp/src/tcp_tls.c)
+
 # Add base kernel sources (non-platform/GC specific)
 list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/kernel.c)
 list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/modules.c)
@@ -56,12 +74,16 @@ if(WIN32)
     )
     # Add Windows-specific kernel sources
     list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/win.c)
+    # Add Windows-specific TCP sources
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tcp/src/tcp_win.c)
 else()
     file(GLOB THREADS_PLATFORM_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/nix/*.c
     )
     # Add POSIX-specific kernel sources
     list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/posix.c)
+    # Add POSIX-specific TCP sources
+    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tcp/src/tcp_posix.c)
 endif()
 
 # Exclude platform-specific directories from main glob
@@ -113,7 +135,11 @@ file(GLOB_RECURSE KERNEL_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/tcp/include/*.h
 )
+
+# Add TCP subdirectory (for tests only - sources are compiled into kernel)
+add_subdirectory(tcp)
 
 if(AK24_BUILD_SHARED_KERNEL)
     add_library(ak24_kernel SHARED ${KERNEL_SOURCES})
@@ -144,6 +170,7 @@ target_include_directories(ak24_kernel PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/include
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/include
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/tcp/include
     ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include
 )
 
@@ -155,6 +182,13 @@ if(AK24_GC_ENABLED)
             -Wl,-w
         )
     endif()
+endif()
+
+if(AK24_TLS_ENABLED)
+    target_compile_definitions(ak24_kernel PUBLIC AK24_TLS_ENABLED=1)
+    target_link_libraries(ak24_kernel PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+else()
+    target_compile_definitions(ak24_kernel PUBLIC AK24_TLS_ENABLED=0)
 endif()
 
 # Apply ASAN flags if enabled
@@ -347,6 +381,7 @@ install(DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/arena/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/tcp/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include/
     DESTINATION include/ak24
     FILES_MATCHING PATTERN "*.h"

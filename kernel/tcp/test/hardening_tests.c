@@ -1,5 +1,6 @@
 
 #include "kernel.h"
+#include "filepath.h"
 #include "tcp.h"
 #include "tcp_internal.h"
 #include "test/assert.h"
@@ -598,6 +599,17 @@ static int test_dual_stack(void) {
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 
+static const char *buf_cstr(ak_buffer_t *buf) {
+  if (!buf)
+    return NULL;
+  uint8_t *data = ak_buffer_data(buf);
+  size_t count = ak_buffer_count(buf);
+  if (buf->capacity > count) {
+    data[count] = '\0';
+  }
+  return (const char *)data;
+}
+
 static int generate_test_cert(const char *cert_path, const char *key_path) {
   EVP_PKEY *pkey = NULL;
   EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
@@ -730,10 +742,16 @@ static int test_tls_available(void) {
 static int test_tls_server_create(void) {
   printf("Test: TLS server creation\n");
 
-  const char *cert_path = "/tmp/ak24_test.crt";
-  const char *key_path = "/tmp/ak24_test.key";
+  ak_buffer_t *temp_dir = ak_filepath_temp();
+  ak_buffer_t *cert_buf = ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.crt");
+  ak_buffer_t *key_buf = ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.key");
+  const char *cert_path = buf_cstr(cert_buf);
+  const char *key_path = buf_cstr(key_buf);
 
   if (generate_test_cert(cert_path, key_path) != 0) {
+    ak_buffer_free(temp_dir);
+    ak_buffer_free(cert_buf);
+    ak_buffer_free(key_buf);
     printf("  Failed to generate test certificate\n");
     return 1;
   }
@@ -759,6 +777,9 @@ static int test_tls_server_create(void) {
 
   unlink(cert_path);
   unlink(key_path);
+  ak_buffer_free(temp_dir);
+  ak_buffer_free(cert_buf);
+  ak_buffer_free(key_buf);
 
   printf("  TLS server created and started successfully\n");
   printf("  PASSED\n");
@@ -768,10 +789,16 @@ static int test_tls_server_create(void) {
 static int test_tls_handshake(void) {
   printf("Test: TLS handshake and data transfer\n");
 
-  const char *cert_path = "/tmp/ak24_test.crt";
-  const char *key_path = "/tmp/ak24_test.key";
+  ak_buffer_t *temp_dir = ak_filepath_temp();
+  ak_buffer_t *cert_buf = ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.crt");
+  ak_buffer_t *key_buf = ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.key");
+  const char *cert_path = buf_cstr(cert_buf);
+  const char *key_path = buf_cstr(key_buf);
 
   if (generate_test_cert(cert_path, key_path) != 0) {
+    ak_buffer_free(temp_dir);
+    ak_buffer_free(cert_buf);
+    ak_buffer_free(key_buf);
     printf("  Failed to generate test certificate\n");
     return 1;
   }
@@ -802,6 +829,9 @@ static int test_tls_handshake(void) {
     ak_tcp_server_free(server);
     unlink(cert_path);
     unlink(key_path);
+    ak_buffer_free(temp_dir);
+    ak_buffer_free(cert_buf);
+    ak_buffer_free(key_buf);
     printf("  TLS client connection failed\n");
     return 1;
   }
@@ -824,6 +854,9 @@ static int test_tls_handshake(void) {
 
   unlink(cert_path);
   unlink(key_path);
+  ak_buffer_free(temp_dir);
+  ak_buffer_free(cert_buf);
+  ak_buffer_free(key_buf);
 
   printf("  TLS handshake and encrypted echo verified\n");
   printf("  PASSED\n");
@@ -833,10 +866,16 @@ static int test_tls_handshake(void) {
 static int test_tls_data_integrity(void) {
   printf("Test: TLS data integrity (large payload)\n");
 
-  const char *cert_path = "/tmp/ak24_test.crt";
-  const char *key_path = "/tmp/ak24_test.key";
+  ak_buffer_t *temp_dir = ak_filepath_temp();
+  ak_buffer_t *cert_buf = ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.crt");
+  ak_buffer_t *key_buf = ak_filepath_join(2, buf_cstr(temp_dir), "ak24_test.key");
+  const char *cert_path = buf_cstr(cert_buf);
+  const char *key_path = buf_cstr(key_buf);
 
   if (generate_test_cert(cert_path, key_path) != 0) {
+    ak_buffer_free(temp_dir);
+    ak_buffer_free(cert_buf);
+    ak_buffer_free(key_buf);
     printf("  Failed to generate test certificate\n");
     return 1;
   }
@@ -867,6 +906,9 @@ static int test_tls_data_integrity(void) {
     ak_tcp_server_free(server);
     unlink(cert_path);
     unlink(key_path);
+    ak_buffer_free(temp_dir);
+    ak_buffer_free(cert_buf);
+    ak_buffer_free(key_buf);
     printf("  TLS client connection failed\n");
     return 1;
   }
@@ -902,6 +944,9 @@ static int test_tls_data_integrity(void) {
 
   unlink(cert_path);
   unlink(key_path);
+  ak_buffer_free(temp_dir);
+  ak_buffer_free(cert_buf);
+  ak_buffer_free(key_buf);
 
   printf("  Verified %zu bytes through TLS\n", total_read);
   printf("  PASSED\n");

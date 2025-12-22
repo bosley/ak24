@@ -39,6 +39,8 @@
 #include "scanner.h"
 #include "sourceloc.h"
 
+#include "tcp.h"
+
 #include <stddef.h>
 #include <time.h>
 
@@ -123,6 +125,17 @@
  * @brief Wait on a condition variable
  */
 #define AK24_COND_WAIT(c, m) AK24_cond_wait(c, m)
+
+/**
+ * @def AK24_COND_TIMEDWAIT
+ * @brief Wait on a condition variable with timeout
+ * @param c Condition variable
+ * @param m Mutex
+ * @param timeout_ms Timeout in milliseconds
+ * @return 0 on signal, 1 on timeout, -1 on error
+ */
+#define AK24_COND_TIMEDWAIT(c, m, timeout_ms)                                  \
+  AK24_cond_timedwait(c, m, timeout_ms)
 
 /**
  * @def AK24_COND_SIGNAL
@@ -250,6 +263,22 @@ int AK24_cond_destroy(AK24_COND *cond);
  * @threadsafe
  */
 int AK24_cond_wait(AK24_COND *cond, AK24_MUTEX *mutex);
+
+/**
+ * @brief Wait on a condition variable with timeout
+ *
+ * Atomically unlocks mutex and waits on condition variable
+ * with a timeout. Reacquires mutex before returning.
+ *
+ * @param cond Condition variable to wait on
+ * @param mutex Mutex associated with condition variable
+ * @param timeout_ms Timeout in milliseconds
+ * @return 0 on signal, 1 on timeout, -1 on error
+ *
+ * @threadsafe
+ */
+int AK24_cond_timedwait(AK24_COND *cond, AK24_MUTEX *mutex,
+                        uint32_t timeout_ms);
 
 /**
  * @brief Signal one thread waiting on condition variable

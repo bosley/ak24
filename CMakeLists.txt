@@ -134,6 +134,7 @@ add_subdirectory(examples/sourceloc-demo)
 add_subdirectory(examples/tcp-server-example)
 add_subdirectory(examples/tcp-client-example)
 add_subdirectory(examples/tcp-client-stressor)
+add_subdirectory(examples/sdl-example)
 
 # Install build configuration file for tests/external projects
 set(AK24_BUILD_CONFIG_FILE "${CMAKE_BINARY_DIR}/ak24-config.mk")

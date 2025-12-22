@@ -15,6 +15,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <time.h>
 
 #ifdef AK24_PLATFORM_WINDOWS
 #include <winsock2.h>
@@ -49,6 +50,17 @@ struct ak_tcp_ctx_s {
 };
 
 /**
+ * @brief IP tracker for rate limiting (Feature 3)
+ */
+typedef struct ak_tcp_ip_tracker_s {
+  char ip[46];                /**< IP address string */
+  size_t active_count;        /**< Active connections from this IP */
+  time_t last_connect_time;   /**< Last connection timestamp */
+  size_t connects_this_second;/**< Connections in current second */
+  struct ak_tcp_ip_tracker_s *next; /**< Next in linked list */
+} ak_tcp_ip_tracker_t;
+
+/**
  * @brief Internal server state
  */
 typedef struct ak_tcp_server_internal_s {
@@ -56,6 +68,7 @@ typedef struct ak_tcp_server_internal_s {
   ak_thread_pool_t *thread_pool; /**< Worker thread pool */
   AK24_THREAD accept_thread;     /**< Accept loop thread */
   bool running;                  /**< Server running flag */
+  bool draining;                 /**< Graceful shutdown in progress */
   AK24_MUTEX mutex;              /**< For thread-safe state access */
   AK24_COND shutdown_cond;       /**< Shutdown signal */
 
@@ -68,9 +81,28 @@ typedef struct ak_tcp_server_internal_s {
   size_t max_connections;    /**< Max concurrent connections (0 = unlimited) */
   size_t active_connections; /**< Current active connection count */
 
+  // Thread pool queue limits (Feature 2)
+  size_t max_pending_tasks; /**< Max queued tasks (0 = unlimited) */
+
+  // Backpressure handling (Feature 1)
+  size_t max_recv_buffer_bytes; /**< Max bytes buffered per conn */
+
+  // Rate limiting (Feature 3)
+  size_t max_connections_per_ip; /**< Max concurrent from same IP */
+  size_t connection_rate_limit;  /**< Max new conn/sec per IP */
+  ak_tcp_ip_tracker_t *ip_trackers; /**< Linked list of IP trackers */
+  AK24_MUTEX ip_tracker_mutex;   /**< Mutex for IP tracker access */
+
   // Timeout defaults
   uint32_t default_recv_timeout_ms; /**< Default receive timeout */
   uint32_t default_send_timeout_ms; /**< Default send timeout */
+
+  // Graceful shutdown (Feature 7)
+  uint32_t shutdown_drain_timeout_ms; /**< Drain timeout */
+
+  // Linger control (Feature 5)
+  bool enable_linger;     /**< Enable SO_LINGER */
+  int linger_timeout_sec; /**< Linger timeout */
 
   // Keepalive defaults
   bool enable_keepalive;      /**< Enable keepalive on connections */
@@ -81,6 +113,19 @@ typedef struct ak_tcp_server_internal_s {
   // Buffer sizes
   size_t recv_buffer_size; /**< Connection receive buffer size */
   size_t send_buffer_size; /**< Connection send buffer size */
+
+  // Socket buffer tuning (Feature 9)
+  size_t socket_recv_buffer; /**< SO_RCVBUF size */
+  size_t socket_send_buffer; /**< SO_SNDBUF size */
+
+  // Statistics
+  size_t connections_accepted;           /**< Total accepted */
+  size_t connections_rejected_limit;     /**< Rejected: conn limit */
+  size_t connections_rejected_queue;     /**< Rejected: queue full */
+  size_t connections_rejected_rate;      /**< Rejected: rate limit */
+  size_t connections_rejected_ip_limit;  /**< Rejected: per-IP limit */
+  size_t total_bytes_received;           /**< Total bytes received */
+  size_t total_bytes_sent;               /**< Total bytes sent */
 
   // Lambdas (owned)
   ak_lambda_t *on_connect;    /**< Connection accept callback */
@@ -132,10 +177,25 @@ void ak_tcp_platform_deinit(void);
 ak_socket_fd_t ak_tcp_socket_create(const char **error);
 
 /**
+ * @brief Create a TCP socket for a specific address family
+ *
+ * Detects IPv4/IPv6 based on address format and creates appropriate socket.
+ * For IPv6, enables dual-stack mode (accepts both IPv4 and IPv6).
+ *
+ * @param addr Bind address (NULL for IPv4 any, "::" for IPv6 dual-stack)
+ * @param error Output error message on failure
+ * @return Socket descriptor or AK_INVALID_SOCKET on failure
+ */
+ak_socket_fd_t ak_tcp_socket_create_for_addr(const char *addr,
+                                              const char **error);
+
+/**
  * @brief Bind socket to address and port
  *
+ * Supports both IPv4 and IPv6 addresses.
+ *
  * @param fd Socket descriptor
- * @param addr Bind address (NULL or "0.0.0.0" for any)
+ * @param addr Bind address (NULL/"0.0.0.0" for IPv4 any, "::" for IPv6 any)
  * @param port Port number
  * @param error Output error message on failure
  * @return 0 on success, -1 on failure
@@ -266,6 +326,39 @@ int ak_tcp_socket_get_timeout(ak_socket_fd_t fd, uint32_t *recv_timeout_ms,
 int ak_tcp_socket_set_keepalive(ak_socket_fd_t fd, int idle_sec,
                                 int interval_sec, int probe_count,
                                 const char **error);
+
+/**
+ * @brief Set SO_LINGER option on socket
+ *
+ * @param fd Socket descriptor
+ * @param enable Enable linger
+ * @param timeout_sec Linger timeout (0 = hard close)
+ * @param error Output error message on failure
+ * @return 0 on success, -1 on failure
+ */
+int ak_tcp_socket_set_linger(ak_socket_fd_t fd, bool enable, int timeout_sec,
+                             const char **error);
+
+/**
+ * @brief Set socket buffer sizes
+ *
+ * @param fd Socket descriptor
+ * @param recv_size SO_RCVBUF size (0 = don't change)
+ * @param send_size SO_SNDBUF size (0 = don't change)
+ * @param error Output error message on failure
+ * @return 0 on success, -1 on failure
+ */
+int ak_tcp_socket_set_buffers(ak_socket_fd_t fd, size_t recv_size,
+                              size_t send_size, const char **error);
+
+/**
+ * @brief Poll socket for read readiness with timeout
+ *
+ * @param fd Socket descriptor
+ * @param timeout_ms Timeout in milliseconds
+ * @return 1 = ready, 0 = timeout, -1 = error
+ */
+int ak_tcp_socket_poll_read(ak_socket_fd_t fd, int timeout_ms);
 
 /**
  * @brief Graceful shutdown (half-close write side)

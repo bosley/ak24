@@ -94,7 +94,7 @@ static void on_handle_echo(void *captured, void *args) {
 
   while (ak_tcp_is_alive(ctx)) {
     const char *error = NULL;
-    ak_buffer_t *line = ak_tcp_recv_until(ctx, "\n", &error);
+    ak_buffer_t *line = ak_tcp_recv_until(ctx, "\n", 8192, &error);
     if (!line) {
       break;
     }
@@ -119,7 +119,7 @@ static void on_handle_multi_echo(void *captured, void *args) {
 
   while (ak_tcp_is_alive(ctx)) {
     const char *error = NULL;
-    ak_buffer_t *line = ak_tcp_recv_until(ctx, "\n", &error);
+    ak_buffer_t *line = ak_tcp_recv_until(ctx, "\n", 8192, &error);
     if (!line) {
       break;
     }
@@ -1117,9 +1117,15 @@ static int test_error_codes(void) {
   AK24_TEST_ASSERT_STR_EQ(ak_tcp_error_string(AK_TCP_ERR_INVALID),
                           "Invalid argument");
   AK24_TEST_ASSERT_STR_EQ(ak_tcp_error_string(AK_TCP_ERR_LIMIT),
-                          "Connection limit reached");
+                          "Limit exceeded");
   AK24_TEST_ASSERT_STR_EQ(ak_tcp_error_string(AK_TCP_ERR_WOULDBLOCK),
                           "Operation would block");
+  AK24_TEST_ASSERT_STR_EQ(ak_tcp_error_string(AK_TCP_ERR_BUFFER_FULL),
+                          "Receive buffer full");
+  AK24_TEST_ASSERT_STR_EQ(ak_tcp_error_string(AK_TCP_ERR_QUEUE_FULL),
+                          "Task queue full");
+  AK24_TEST_ASSERT_STR_EQ(ak_tcp_error_string(AK_TCP_ERR_RATE_LIMIT),
+                          "Rate limit exceeded");
 
   // Unknown error
   const char *unknown = ak_tcp_error_string((ak_tcp_error_t)999);
@@ -1646,6 +1652,9 @@ int main(void) {
   AK24_TEST_RUN(test_connection_limit);
   AK24_TEST_RUN(test_custom_buffer_sizes);
   AK24_TEST_RUN(test_extended_error_api);
+
+  extern int run_tcp_hardening_tests(void);
+  run_tcp_hardening_tests();
 
   printf("\n============================================================\n");
   printf("       All TCP Tests Passed - Features Verified!\n");

@@ -17,15 +17,18 @@ typedef struct ak_tcp_server_s ak_tcp_server_t;
  * @brief TCP error codes for structured error handling
  */
 typedef enum {
-  AK_TCP_OK = 0,         /**< Success */
-  AK_TCP_ERR_TIMEOUT,    /**< Operation timed out */
-  AK_TCP_ERR_CLOSED,     /**< Connection closed gracefully */
-  AK_TCP_ERR_RESET,      /**< Connection reset by peer */
-  AK_TCP_ERR_NETWORK,    /**< Network error */
-  AK_TCP_ERR_MEMORY,     /**< Memory allocation failed */
-  AK_TCP_ERR_INVALID,    /**< Invalid argument */
-  AK_TCP_ERR_LIMIT,      /**< Connection limit reached */
-  AK_TCP_ERR_WOULDBLOCK, /**< Operation would block (non-blocking mode) */
+  AK_TCP_OK = 0,          /**< Success */
+  AK_TCP_ERR_TIMEOUT,     /**< Operation timed out */
+  AK_TCP_ERR_CLOSED,      /**< Connection closed gracefully */
+  AK_TCP_ERR_RESET,       /**< Connection reset by peer */
+  AK_TCP_ERR_NETWORK,     /**< Network error */
+  AK_TCP_ERR_MEMORY,      /**< Memory allocation failed */
+  AK_TCP_ERR_INVALID,     /**< Invalid argument */
+  AK_TCP_ERR_LIMIT,       /**< Limit reached (recv_until max_bytes, etc.) */
+  AK_TCP_ERR_WOULDBLOCK,  /**< Operation would block (non-blocking mode) */
+  AK_TCP_ERR_BUFFER_FULL, /**< Receive buffer full (backpressure) */
+  AK_TCP_ERR_QUEUE_FULL,  /**< Task queue full (server overloaded) */
+  AK_TCP_ERR_RATE_LIMIT,  /**< Rate limit exceeded */
 } ak_tcp_error_t;
 
 /**
@@ -66,11 +69,31 @@ typedef struct {
   // Connection limits
   size_t max_connections; /**< Max concurrent connections (0 = unlimited) */
 
+  // Thread pool queue limits (Feature 2)
+  size_t max_pending_tasks; /**< Max queued connection tasks (0 = unlimited) */
+
+  // Backpressure handling (Feature 1)
+  size_t max_recv_buffer_bytes; /**< Max bytes buffered per conn (0 = unlimited)
+                                 */
+
+  // Rate limiting (Feature 3)
+  size_t max_connections_per_ip; /**< Max concurrent from same IP (0 =
+                                    unlimited) */
+  size_t connection_rate_limit;  /**< Max new conn/sec per IP (0 = unlimited) */
+
   // Timeout defaults (milliseconds, 0 = no timeout)
   uint32_t default_recv_timeout_ms; /**< Default receive timeout for new
                                        connections */
   uint32_t
       default_send_timeout_ms; /**< Default send timeout for new connections */
+
+  // Graceful shutdown (Feature 7)
+  uint32_t shutdown_drain_timeout_ms; /**< Time to wait for handlers to
+                                         complete (0 = immediate) */
+
+  // Linger control (Feature 5)
+  bool enable_linger;     /**< Enable SO_LINGER on connections */
+  int linger_timeout_sec; /**< 0 = hard close, >0 = wait up to N seconds */
 
   // Keepalive defaults (0 = system defaults or disabled)
   bool enable_keepalive;      /**< Enable TCP keepalive on connections */
@@ -81,6 +104,10 @@ typedef struct {
   // Buffer sizes (0 = use defaults)
   size_t recv_buffer_size; /**< Receive buffer size (default: 4096) */
   size_t send_buffer_size; /**< Send buffer size (default: 4096) */
+
+  // Socket buffer tuning (Feature 9)
+  size_t socket_recv_buffer; /**< SO_RCVBUF size (0 = system default) */
+  size_t socket_send_buffer; /**< SO_SNDBUF size (0 = system default) */
 } ak_tcp_server_config_t;
 
 /**
@@ -158,12 +185,13 @@ ssize_t ak_tcp_recv(ak_tcp_ctx_t *ctx, ak_buffer_t *buffer, size_t max_bytes,
  *
  * @param ctx Connection context
  * @param delim Delimiter string to search for
+ * @param max_bytes Maximum bytes to read before giving up (0 = unlimited)
  * @param error Output error message on failure
  * @return New buffer with data up to and including delimiter, or NULL on
- * failure
+ * failure. Returns NULL with AK_TCP_ERR_LIMIT if max_bytes exceeded.
  */
 ak_buffer_t *ak_tcp_recv_until(ak_tcp_ctx_t *ctx, const char *delim,
-                               const char **error);
+                               size_t max_bytes, const char **error);
 
 /**
  * @brief Check if connection is alive
@@ -266,12 +294,44 @@ void ak_tcp_abort(ak_tcp_ctx_t *ctx);
 
 // Server stats
 /**
+ * @brief Server statistics
+ */
+typedef struct {
+  size_t connections_accepted;           /**< Total connections accepted */
+  size_t connections_rejected_limit;     /**< Rejected due to connection limit
+                                          */
+  size_t connections_rejected_queue;     /**< Rejected due to queue full */
+  size_t connections_rejected_rate;      /**< Rejected due to rate limit */
+  size_t connections_rejected_ip_limit;  /**< Rejected due to per-IP limit */
+  size_t active_connections;             /**< Current active connections */
+  size_t total_bytes_received;           /**< Total bytes received */
+  size_t total_bytes_sent;               /**< Total bytes sent */
+} ak_tcp_server_stats_t;
+
+/**
  * @brief Get current active connection count
  *
  * @param server Server handle
  * @return Number of active connections
  */
 size_t ak_tcp_server_connection_count(ak_tcp_server_t *server);
+
+/**
+ * @brief Get server statistics
+ *
+ * @param server Server handle
+ * @param stats Output for statistics (caller provides storage)
+ * @return 0 on success, -1 on failure
+ */
+int ak_tcp_server_get_stats(ak_tcp_server_t *server, ak_tcp_server_stats_t *stats);
+
+/**
+ * @brief Check if server is draining (graceful shutdown in progress)
+ *
+ * @param server Server handle
+ * @return true if draining, false otherwise
+ */
+bool ak_tcp_server_is_draining(ak_tcp_server_t *server);
 
 // Extended error-code based operations
 /**
@@ -306,13 +366,15 @@ ak_tcp_error_t ak_tcp_recv_ex(ak_tcp_ctx_t *ctx, ak_buffer_t *buffer,
  *
  * @param ctx Connection context
  * @param delim Delimiter string to search for
+ * @param max_bytes Maximum bytes to read before giving up (0 = unlimited)
  * @param result Output for result buffer (caller must free)
  * @param error Output error message on failure (can be NULL)
- * @return AK_TCP_OK on success, AK_TCP_ERR_TIMEOUT on timeout, error code on
- * failure
+ * @return AK_TCP_OK on success, AK_TCP_ERR_LIMIT if max_bytes exceeded,
+ *         AK_TCP_ERR_TIMEOUT on timeout, error code on failure
  */
 ak_tcp_error_t ak_tcp_recv_until_ex(ak_tcp_ctx_t *ctx, const char *delim,
-                                    ak_buffer_t **result, const char **error);
+                                    size_t max_bytes, ak_buffer_t **result,
+                                    const char **error);
 
 // Initialization/Deinit (called by ak_kernel_init/deinit)
 /**

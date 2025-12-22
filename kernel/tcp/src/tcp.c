@@ -13,6 +13,7 @@
 #include "threads.h"
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 // Default buffer sizes
 #define TCP_READ_BUFFER_SIZE 4096
@@ -45,9 +46,15 @@ const char *ak_tcp_error_string(ak_tcp_error_t err) {
   case AK_TCP_ERR_INVALID:
     return "Invalid argument";
   case AK_TCP_ERR_LIMIT:
-    return "Connection limit reached";
+    return "Limit exceeded";
   case AK_TCP_ERR_WOULDBLOCK:
     return "Operation would block";
+  case AK_TCP_ERR_BUFFER_FULL:
+    return "Receive buffer full";
+  case AK_TCP_ERR_QUEUE_FULL:
+    return "Task queue full";
+  case AK_TCP_ERR_RATE_LIMIT:
+    return "Rate limit exceeded";
   default:
     return "Unknown error";
   }
@@ -62,15 +69,24 @@ ak_tcp_server_config_t ak_tcp_server_config_default(void) {
       .on_connect = NULL,
       .on_handle = NULL,
       .on_disconnect = NULL,
-      .max_connections = 0,         // Unlimited
-      .default_recv_timeout_ms = 0, // No timeout
-      .default_send_timeout_ms = 0, // No timeout
+      .max_connections = 0,           // Unlimited
+      .max_pending_tasks = 0,         // Unlimited
+      .max_recv_buffer_bytes = 0,     // Unlimited
+      .max_connections_per_ip = 0,    // Unlimited
+      .connection_rate_limit = 0,     // Unlimited
+      .default_recv_timeout_ms = 0,   // No timeout
+      .default_send_timeout_ms = 0,   // No timeout
+      .shutdown_drain_timeout_ms = 0, // Immediate shutdown
+      .enable_linger = false,
+      .linger_timeout_sec = 0,
       .enable_keepalive = false,
       .keepalive_idle_sec = TCP_DEFAULT_KEEPALIVE_IDLE,
       .keepalive_interval_sec = TCP_DEFAULT_KEEPALIVE_INTERVAL,
       .keepalive_count = TCP_DEFAULT_KEEPALIVE_COUNT,
       .recv_buffer_size = TCP_READ_BUFFER_SIZE,
       .send_buffer_size = TCP_WRITE_BUFFER_SIZE,
+      .socket_recv_buffer = 0, // System default
+      .socket_send_buffer = 0, // System default
   };
   return cfg;
 }
@@ -264,7 +280,7 @@ ssize_t ak_tcp_recv(ak_tcp_ctx_t *ctx, ak_buffer_t *buffer, size_t max_bytes,
 }
 
 ak_buffer_t *ak_tcp_recv_until(ak_tcp_ctx_t *ctx, const char *delim,
-                               const char **error) {
+                               size_t max_bytes, const char **error) {
   if (!ctx || !delim) {
     if (error) {
       *error = "Invalid arguments";
@@ -303,6 +319,15 @@ ak_buffer_t *ak_tcp_recv_until(ak_tcp_ctx_t *ctx, const char *delim,
       }
     }
 
+    // Check if we've exceeded max_bytes limit
+    if (max_bytes > 0 && count >= max_bytes) {
+      if (error) {
+        *error = "Maximum receive size exceeded before delimiter found";
+      }
+      ak_buffer_free(result);
+      return NULL;
+    }
+
     // Read more data
     AK24_MUTEX_LOCK(&ctx->mutex);
     if (!ctx->alive) {
@@ -312,8 +337,17 @@ ak_buffer_t *ak_tcp_recv_until(ak_tcp_ctx_t *ctx, const char *delim,
     ak_socket_fd_t fd = ctx->socket_fd;
     AK24_MUTEX_UNLOCK(&ctx->mutex);
 
+    // Calculate how much to read (respect max_bytes limit)
+    size_t to_read = TCP_RECV_CHUNK_SIZE;
+    if (max_bytes > 0 && count + to_read > max_bytes) {
+      to_read = max_bytes - count;
+      if (to_read == 0) {
+        to_read = 1; // Read at least 1 byte to detect delimiter
+      }
+    }
+
     uint8_t temp[TCP_RECV_CHUNK_SIZE];
-    ssize_t received = ak_tcp_socket_recv(fd, temp, TCP_RECV_CHUNK_SIZE, error);
+    ssize_t received = ak_tcp_socket_recv(fd, temp, to_read, error);
     if (received < 0) {
       ak_buffer_free(result);
       return NULL;
@@ -565,7 +599,8 @@ ak_tcp_error_t ak_tcp_recv_ex(ak_tcp_ctx_t *ctx, ak_buffer_t *buffer,
 }
 
 ak_tcp_error_t ak_tcp_recv_until_ex(ak_tcp_ctx_t *ctx, const char *delim,
-                                    ak_buffer_t **result, const char **error) {
+                                    size_t max_bytes, ak_buffer_t **result,
+                                    const char **error) {
   if (result) {
     *result = NULL;
   }
@@ -577,13 +612,18 @@ ak_tcp_error_t ak_tcp_recv_until_ex(ak_tcp_ctx_t *ctx, const char *delim,
     return AK_TCP_ERR_INVALID;
   }
 
-  ak_buffer_t *buf = ak_tcp_recv_until(ctx, delim, error);
+  ak_buffer_t *buf = ak_tcp_recv_until(ctx, delim, max_bytes, error);
   if (!buf) {
     if (!ak_tcp_is_alive(ctx)) {
       return AK_TCP_ERR_CLOSED;
     }
-    if (error && *error && strstr(*error, "timed out")) {
-      return AK_TCP_ERR_TIMEOUT;
+    if (error && *error) {
+      if (strstr(*error, "Maximum receive size exceeded")) {
+        return AK_TCP_ERR_LIMIT;
+      }
+      if (strstr(*error, "timed out")) {
+        return AK_TCP_ERR_TIMEOUT;
+      }
     }
     return AK_TCP_ERR_NETWORK;
   }
@@ -606,6 +646,91 @@ size_t ak_tcp_server_connection_count(ak_tcp_server_t *server) {
   AK24_MUTEX_UNLOCK(&server->internal->mutex);
 
   return count;
+}
+
+int ak_tcp_server_get_stats(ak_tcp_server_t *server, ak_tcp_server_stats_t *stats) {
+  if (!server || !server->internal || !stats) {
+    return -1;
+  }
+
+  AK24_MUTEX_LOCK(&server->internal->mutex);
+  stats->connections_accepted = server->internal->connections_accepted;
+  stats->connections_rejected_limit = server->internal->connections_rejected_limit;
+  stats->connections_rejected_queue = server->internal->connections_rejected_queue;
+  stats->connections_rejected_rate = server->internal->connections_rejected_rate;
+  stats->connections_rejected_ip_limit = server->internal->connections_rejected_ip_limit;
+  stats->active_connections = server->internal->active_connections;
+  stats->total_bytes_received = server->internal->total_bytes_received;
+  stats->total_bytes_sent = server->internal->total_bytes_sent;
+  AK24_MUTEX_UNLOCK(&server->internal->mutex);
+
+  return 0;
+}
+
+bool ak_tcp_server_is_draining(ak_tcp_server_t *server) {
+  if (!server || !server->internal) {
+    return false;
+  }
+
+  AK24_MUTEX_LOCK(&server->internal->mutex);
+  bool draining = server->internal->draining;
+  AK24_MUTEX_UNLOCK(&server->internal->mutex);
+
+  return draining;
+}
+
+// ============================================================================
+// IP Tracker Helpers (Feature 3: Rate Limiting)
+// ============================================================================
+
+static ak_tcp_ip_tracker_t *ip_tracker_find(ak_tcp_server_internal_t *server,
+                                             const char *ip) {
+  ak_tcp_ip_tracker_t *tracker = server->ip_trackers;
+  while (tracker) {
+    if (strcmp(tracker->ip, ip) == 0) {
+      return tracker;
+    }
+    tracker = tracker->next;
+  }
+  return NULL;
+}
+
+static ak_tcp_ip_tracker_t *ip_tracker_get_or_create(ak_tcp_server_internal_t *server,
+                                                      const char *ip) {
+  ak_tcp_ip_tracker_t *tracker = ip_tracker_find(server, ip);
+  if (tracker) {
+    return tracker;
+  }
+
+  // Create new tracker
+  tracker = AK24_ALLOC(sizeof(ak_tcp_ip_tracker_t));
+  if (!tracker) {
+    return NULL;
+  }
+  memset(tracker, 0, sizeof(ak_tcp_ip_tracker_t));
+  strncpy(tracker->ip, ip, sizeof(tracker->ip) - 1);
+  tracker->next = server->ip_trackers;
+  server->ip_trackers = tracker;
+  return tracker;
+}
+
+static void ip_tracker_decrement(ak_tcp_server_internal_t *server, const char *ip) {
+  AK24_MUTEX_LOCK(&server->ip_tracker_mutex);
+  ak_tcp_ip_tracker_t *tracker = ip_tracker_find(server, ip);
+  if (tracker && tracker->active_count > 0) {
+    tracker->active_count--;
+  }
+  AK24_MUTEX_UNLOCK(&server->ip_tracker_mutex);
+}
+
+static void ip_trackers_free(ak_tcp_server_internal_t *server) {
+  ak_tcp_ip_tracker_t *tracker = server->ip_trackers;
+  while (tracker) {
+    ak_tcp_ip_tracker_t *next = tracker->next;
+    AK24_FREE(tracker);
+    tracker = next;
+  }
+  server->ip_trackers = NULL;
 }
 
 // ============================================================================
@@ -632,10 +757,17 @@ static void worker_task_fn(void *captured, void *args) {
     ak_lambda_invoke(server->on_disconnect, ctx);
   }
 
+  // Decrement IP tracker active count (Feature 3)
+  ip_tracker_decrement(server, ctx->remote_ip);
+
   // Decrement active connection count
   AK24_MUTEX_LOCK(&server->mutex);
   if (server->active_connections > 0) {
     server->active_connections--;
+  }
+  // Signal if draining and no more active connections
+  if (server->draining && server->active_connections == 0) {
+    AK24_COND_SIGNAL(&server->shutdown_cond);
   }
   AK24_MUTEX_UNLOCK(&server->mutex);
 
@@ -658,6 +790,24 @@ static void *accept_loop(void *arg) {
 
     if (!running) {
       break;
+    }
+
+    // Feature 6: Non-blocking accept with timeout using poll
+    int poll_result = ak_tcp_socket_poll_read(server->listen_fd, 1000); // 1 second
+    if (poll_result == 0) {
+      // Timeout - check if we should stop and loop again
+      continue;
+    }
+    if (poll_result < 0) {
+      // Error - check if shutting down
+      AK24_MUTEX_LOCK(&server->mutex);
+      running = server->running;
+      AK24_MUTEX_UNLOCK(&server->mutex);
+      if (!running) {
+        break;
+      }
+      AK24_LOG_WARN("Poll failed on listen socket");
+      continue;
     }
 
     // Accept connection
@@ -686,12 +836,70 @@ static void *accept_loop(void *arg) {
     bool limit_reached =
         (server->max_connections > 0 &&
          server->active_connections >= server->max_connections);
+    if (limit_reached) {
+      server->connections_rejected_limit++;
+    }
     AK24_MUTEX_UNLOCK(&server->mutex);
 
     if (limit_reached) {
       ak_tcp_socket_close(client_fd);
       AK24_LOG_WARN("Connection limit reached, rejecting %s:%d", remote_ip,
                     remote_port);
+      continue;
+    }
+
+    // Feature 3: Rate limiting checks
+    bool rate_limited = false;
+    bool ip_limited = false;
+
+    if (server->max_connections_per_ip > 0 || server->connection_rate_limit > 0) {
+      AK24_MUTEX_LOCK(&server->ip_tracker_mutex);
+      ak_tcp_ip_tracker_t *tracker = ip_tracker_get_or_create(server, remote_ip);
+      if (tracker) {
+        time_t now = time(NULL);
+
+        // Check per-IP connection limit
+        if (server->max_connections_per_ip > 0 &&
+            tracker->active_count >= server->max_connections_per_ip) {
+          ip_limited = true;
+        }
+
+        // Check rate limit (connections per second)
+        if (!ip_limited && server->connection_rate_limit > 0) {
+          if (tracker->last_connect_time == now) {
+            if (tracker->connects_this_second >= server->connection_rate_limit) {
+              rate_limited = true;
+            } else {
+              tracker->connects_this_second++;
+            }
+          } else {
+            tracker->last_connect_time = now;
+            tracker->connects_this_second = 1;
+          }
+        }
+
+        if (!ip_limited && !rate_limited) {
+          tracker->active_count++;
+        }
+      }
+      AK24_MUTEX_UNLOCK(&server->ip_tracker_mutex);
+    }
+
+    if (ip_limited) {
+      AK24_MUTEX_LOCK(&server->mutex);
+      server->connections_rejected_ip_limit++;
+      AK24_MUTEX_UNLOCK(&server->mutex);
+      ak_tcp_socket_close(client_fd);
+      AK24_LOG_WARN("Per-IP connection limit reached for %s, rejecting", remote_ip);
+      continue;
+    }
+
+    if (rate_limited) {
+      AK24_MUTEX_LOCK(&server->mutex);
+      server->connections_rejected_rate++;
+      AK24_MUTEX_UNLOCK(&server->mutex);
+      ak_tcp_socket_close(client_fd);
+      AK24_LOG_WARN("Rate limit exceeded for %s, rejecting", remote_ip);
       continue;
     }
 
@@ -708,6 +916,8 @@ static void *accept_loop(void *arg) {
     }
 
     if (!accept_connection) {
+      // Decrement IP tracker since we're rejecting
+      ip_tracker_decrement(server, remote_ip);
       ak_tcp_socket_close(client_fd);
       AK24_LOG_DEBUG("Rejected connection from %s:%d", remote_ip, remote_port);
       continue;
@@ -725,6 +935,22 @@ static void *accept_loop(void *arg) {
       }
     }
 
+    // Feature 5: Apply linger settings if configured
+    if (server->enable_linger) {
+      if (ak_tcp_socket_set_linger(client_fd, true, server->linger_timeout_sec,
+                                   &error) != 0) {
+        AK24_LOG_WARN("Failed to set linger: %s", error ? error : "Unknown");
+      }
+    }
+
+    // Feature 9: Apply socket buffer tuning if configured
+    if (server->socket_recv_buffer > 0 || server->socket_send_buffer > 0) {
+      if (ak_tcp_socket_set_buffers(client_fd, server->socket_recv_buffer,
+                                    server->socket_send_buffer, &error) != 0) {
+        AK24_LOG_WARN("Failed to set socket buffers: %s", error ? error : "Unknown");
+      }
+    }
+
     // Apply keepalive if configured
     if (server->enable_keepalive) {
       if (ak_tcp_socket_set_keepalive(client_fd, server->keepalive_idle_sec,
@@ -739,6 +965,7 @@ static void *accept_loop(void *arg) {
         ak_tcp_ctx_new(client_fd, remote_ip, remote_port,
                        server->recv_buffer_size, server->send_buffer_size);
     if (!ctx) {
+      ip_tracker_decrement(server, remote_ip);
       ak_tcp_socket_close(client_fd);
       AK24_LOG_ERROR("Failed to create connection context");
       continue;
@@ -748,9 +975,10 @@ static void *accept_loop(void *arg) {
     ctx->recv_timeout_ms = server->default_recv_timeout_ms;
     ctx->send_timeout_ms = server->default_send_timeout_ms;
 
-    // Increment active connection count
+    // Increment active connection count and stats
     AK24_MUTEX_LOCK(&server->mutex);
     server->active_connections++;
+    server->connections_accepted++;
     AK24_MUTEX_UNLOCK(&server->mutex);
 
     // Create worker task
@@ -761,6 +989,7 @@ static void *accept_loop(void *arg) {
         server->active_connections--;
       }
       AK24_MUTEX_UNLOCK(&server->mutex);
+      ip_tracker_decrement(server, remote_ip);
       ak_tcp_ctx_free(ctx);
       AK24_LOG_ERROR("Failed to create worker task");
       continue;
@@ -776,6 +1005,7 @@ static void *accept_loop(void *arg) {
         server->active_connections--;
       }
       AK24_MUTEX_UNLOCK(&server->mutex);
+      ip_tracker_decrement(server, remote_ip);
       AK24_FREE(task);
       ak_tcp_ctx_free(ctx);
       AK24_LOG_ERROR("Failed to create worker lambda");
@@ -783,15 +1013,19 @@ static void *accept_loop(void *arg) {
     }
 
     if (ak_thread_pool_enqueue(server->thread_pool, worker_lambda, NULL) != 0) {
+      // Feature 2: Queue full - reject connection
       AK24_MUTEX_LOCK(&server->mutex);
       if (server->active_connections > 0) {
         server->active_connections--;
       }
+      server->connections_rejected_queue++;
       AK24_MUTEX_UNLOCK(&server->mutex);
+      ip_tracker_decrement(server, remote_ip);
       ak_lambda_free(worker_lambda);
       AK24_FREE(task);
       ak_tcp_ctx_free(ctx);
-      AK24_LOG_ERROR("Failed to enqueue worker task");
+      AK24_LOG_WARN("Task queue full, rejecting connection from %s:%d",
+                    remote_ip, remote_port);
       continue;
     }
 
@@ -880,9 +1114,28 @@ ak_tcp_server_t *ak_tcp_server_new(const ak_tcp_server_config_t *cfg,
   internal->max_connections = cfg->max_connections;
   internal->active_connections = 0;
 
+  // Copy thread pool queue limits (Feature 2)
+  internal->max_pending_tasks = cfg->max_pending_tasks;
+
+  // Copy backpressure settings (Feature 1)
+  internal->max_recv_buffer_bytes = cfg->max_recv_buffer_bytes;
+
+  // Copy rate limiting settings (Feature 3)
+  internal->max_connections_per_ip = cfg->max_connections_per_ip;
+  internal->connection_rate_limit = cfg->connection_rate_limit;
+  internal->ip_trackers = NULL;
+
   // Copy timeout defaults
   internal->default_recv_timeout_ms = cfg->default_recv_timeout_ms;
   internal->default_send_timeout_ms = cfg->default_send_timeout_ms;
+
+  // Copy graceful shutdown settings (Feature 7)
+  internal->shutdown_drain_timeout_ms = cfg->shutdown_drain_timeout_ms;
+  internal->draining = false;
+
+  // Copy linger settings (Feature 5)
+  internal->enable_linger = cfg->enable_linger;
+  internal->linger_timeout_sec = cfg->linger_timeout_sec;
 
   // Copy keepalive defaults
   internal->enable_keepalive = cfg->enable_keepalive;
@@ -902,14 +1155,29 @@ ak_tcp_server_t *ak_tcp_server_new(const ak_tcp_server_config_t *cfg,
   internal->send_buffer_size =
       cfg->send_buffer_size > 0 ? cfg->send_buffer_size : TCP_WRITE_BUFFER_SIZE;
 
+  // Copy socket buffer tuning (Feature 9)
+  internal->socket_recv_buffer = cfg->socket_recv_buffer;
+  internal->socket_send_buffer = cfg->socket_send_buffer;
+
+  // Initialize statistics
+  internal->connections_accepted = 0;
+  internal->connections_rejected_limit = 0;
+  internal->connections_rejected_queue = 0;
+  internal->connections_rejected_rate = 0;
+  internal->connections_rejected_ip_limit = 0;
+  internal->total_bytes_received = 0;
+  internal->total_bytes_sent = 0;
+
   // Initialize mutex and condition
   AK24_MUTEX_INIT(&internal->mutex);
   AK24_COND_INIT(&internal->shutdown_cond);
+  AK24_MUTEX_INIT(&internal->ip_tracker_mutex);
 
-  // Create thread pool
+  // Create thread pool with queue limit
   size_t pool_size = cfg->thread_pool_size > 0 ? cfg->thread_pool_size : 4;
   ak_thread_pool_config_t pool_cfg = ak_thread_pool_config_default();
   pool_cfg.max_workers = pool_size;
+  pool_cfg.max_queue_size = cfg->max_pending_tasks; // Feature 2
 
   internal->thread_pool = ak_thread_pool_new(&pool_cfg);
   if (!internal->thread_pool) {
@@ -918,6 +1186,7 @@ ak_tcp_server_t *ak_tcp_server_new(const ak_tcp_server_config_t *cfg,
     }
     AK24_MUTEX_DESTROY(&internal->mutex);
     AK24_COND_DESTROY(&internal->shutdown_cond);
+    AK24_MUTEX_DESTROY(&internal->ip_tracker_mutex);
     AK24_FREE(internal);
     AK24_FREE(server);
     if (error) {
@@ -949,13 +1218,11 @@ int ak_tcp_server_start(ak_tcp_server_t *server, const char **error) {
   }
   AK24_MUTEX_UNLOCK(&internal->mutex);
 
-  // Create listening socket
-  internal->listen_fd = ak_tcp_socket_create(error);
+  internal->listen_fd = ak_tcp_socket_create_for_addr(internal->bind_addr, error);
   if (internal->listen_fd == AK_INVALID_SOCKET) {
     return -1;
   }
 
-  // Bind
   if (ak_tcp_socket_bind(internal->listen_fd, internal->bind_addr,
                          internal->port, error) != 0) {
     ak_tcp_socket_close(internal->listen_fd);
@@ -1007,6 +1274,7 @@ void ak_tcp_server_stop(ak_tcp_server_t *server) {
     return;
   }
   internal->running = false;
+  internal->draining = true; // Feature 7: Enter draining state
   AK24_MUTEX_UNLOCK(&internal->mutex);
 
   // Close listening socket to unblock accept
@@ -1017,6 +1285,26 @@ void ak_tcp_server_stop(ak_tcp_server_t *server) {
 
   // Wait for accept thread to finish
   AK24_THREAD_JOIN(internal->accept_thread);
+
+  // Feature 7: Graceful draining - wait for handlers to complete
+  if (internal->shutdown_drain_timeout_ms > 0) {
+    AK24_MUTEX_LOCK(&internal->mutex);
+
+    while (internal->active_connections > 0) {
+      int result = AK24_COND_TIMEDWAIT(&internal->shutdown_cond,
+                                       &internal->mutex,
+                                       internal->shutdown_drain_timeout_ms);
+      if (result != 0) {
+        // Timeout or error
+        AK24_LOG_WARN("Drain timeout: %zu connections still active",
+                      internal->active_connections);
+        break;
+      }
+    }
+
+    internal->draining = false;
+    AK24_MUTEX_UNLOCK(&internal->mutex);
+  }
 
   // Wait for thread pool to drain
   ak_thread_pool_wait(internal->thread_pool);
@@ -1049,6 +1337,9 @@ void ak_tcp_server_free(ak_tcp_server_t *server) {
       ak_lambda_free(internal->on_disconnect);
     }
 
+    // Free IP trackers
+    ip_trackers_free(internal);
+
     // Free bind address
     if (internal->bind_addr) {
       AK24_FREE(internal->bind_addr);
@@ -1057,6 +1348,7 @@ void ak_tcp_server_free(ak_tcp_server_t *server) {
     // Destroy synchronization primitives
     AK24_MUTEX_DESTROY(&internal->mutex);
     AK24_COND_DESTROY(&internal->shutdown_cond);
+    AK24_MUTEX_DESTROY(&internal->ip_tracker_mutex);
 
     AK24_FREE(internal);
   }

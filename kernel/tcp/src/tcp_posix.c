@@ -26,7 +26,6 @@
 static int sigpipe_handled = 0;
 
 void ak_tcp_platform_init(void) {
-  // Ignore SIGPIPE to prevent crashes when writing to closed sockets
   if (!sigpipe_handled) {
     signal(SIGPIPE, SIG_IGN);
     sigpipe_handled = 1;
@@ -34,11 +33,29 @@ void ak_tcp_platform_init(void) {
 }
 
 void ak_tcp_platform_deinit(void) {
-  // Nothing to clean up on POSIX
+}
+
+static int ak_tcp_detect_addr_family(const char *addr) {
+  if (addr == NULL || strcmp(addr, "0.0.0.0") == 0) {
+    return AF_INET;
+  }
+  if (strcmp(addr, "::") == 0 || strcmp(addr, "::0") == 0) {
+    return AF_INET6;
+  }
+  if (strchr(addr, ':') != NULL) {
+    return AF_INET6;
+  }
+  return AF_INET;
 }
 
 ak_socket_fd_t ak_tcp_socket_create(const char **error) {
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
+  return ak_tcp_socket_create_for_addr(NULL, error);
+}
+
+ak_socket_fd_t ak_tcp_socket_create_for_addr(const char *addr,
+                                              const char **error) {
+  int family = ak_tcp_detect_addr_family(addr);
+  int fd = socket(family, SOCK_STREAM, 0);
   if (fd < 0) {
     if (error) {
       *error = strerror(errno);
@@ -46,7 +63,6 @@ ak_socket_fd_t ak_tcp_socket_create(const char **error) {
     return AK_INVALID_SOCKET;
   }
 
-  // Enable address reuse
   int optval = 1;
   if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
     if (error) {
@@ -56,32 +72,71 @@ ak_socket_fd_t ak_tcp_socket_create(const char **error) {
     return AK_INVALID_SOCKET;
   }
 
+  if (family == AF_INET6) {
+    int v6only = 0;
+    if (setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only)) <
+        0) {
+      if (error) {
+        *error = strerror(errno);
+      }
+      close(fd);
+      return AK_INVALID_SOCKET;
+    }
+  }
+
   return fd;
 }
 
 int ak_tcp_socket_bind(ak_socket_fd_t fd, const char *addr, uint16_t port,
                        const char **error) {
-  struct sockaddr_in server_addr;
-  memset(&server_addr, 0, sizeof(server_addr));
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_port = htons(port);
+  int family = ak_tcp_detect_addr_family(addr);
 
-  if (addr == NULL || strcmp(addr, "0.0.0.0") == 0) {
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-  } else {
-    if (inet_pton(AF_INET, addr, &server_addr.sin_addr) <= 0) {
+  if (family == AF_INET6) {
+    struct sockaddr_in6 server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin6_family = AF_INET6;
+    server_addr.sin6_port = htons(port);
+
+    if (addr == NULL || strcmp(addr, "::") == 0 || strcmp(addr, "::0") == 0) {
+      server_addr.sin6_addr = in6addr_any;
+    } else {
+      if (inet_pton(AF_INET6, addr, &server_addr.sin6_addr) <= 0) {
+        if (error) {
+          *error = "Invalid IPv6 address format";
+        }
+        return -1;
+      }
+    }
+
+    if (bind(fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
       if (error) {
-        *error = "Invalid address format";
+        *error = strerror(errno);
       }
       return -1;
     }
-  }
+  } else {
+    struct sockaddr_in server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
 
-  if (bind(fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-    if (error) {
-      *error = strerror(errno);
+    if (addr == NULL || strcmp(addr, "0.0.0.0") == 0) {
+      server_addr.sin_addr.s_addr = INADDR_ANY;
+    } else {
+      if (inet_pton(AF_INET, addr, &server_addr.sin_addr) <= 0) {
+        if (error) {
+          *error = "Invalid IPv4 address format";
+        }
+        return -1;
+      }
     }
-    return -1;
+
+    if (bind(fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+      if (error) {
+        *error = strerror(errno);
+      }
+      return -1;
+    }
   }
 
   return 0;
@@ -104,7 +159,7 @@ int ak_tcp_socket_listen(ak_socket_fd_t fd, int backlog, const char **error) {
 
 ak_socket_fd_t ak_tcp_socket_accept(ak_socket_fd_t fd, char *remote_ip,
                                     uint16_t *remote_port, const char **error) {
-  struct sockaddr_in client_addr;
+  struct sockaddr_storage client_addr;
   socklen_t client_len = sizeof(client_addr);
 
   int client_fd = accept(fd, (struct sockaddr *)&client_addr, &client_len);
@@ -115,12 +170,28 @@ ak_socket_fd_t ak_tcp_socket_accept(ak_socket_fd_t fd, char *remote_ip,
     return AK_INVALID_SOCKET;
   }
 
-  // Extract remote address info
-  if (remote_ip) {
-    inet_ntop(AF_INET, &client_addr.sin_addr, remote_ip, 46);
-  }
-  if (remote_port) {
-    *remote_port = ntohs(client_addr.sin_port);
+  if (client_addr.ss_family == AF_INET6) {
+    struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)&client_addr;
+    if (remote_ip) {
+      if (IN6_IS_ADDR_V4MAPPED(&addr6->sin6_addr)) {
+        struct in_addr addr4;
+        memcpy(&addr4, &addr6->sin6_addr.s6_addr[12], 4);
+        inet_ntop(AF_INET, &addr4, remote_ip, 46);
+      } else {
+        inet_ntop(AF_INET6, &addr6->sin6_addr, remote_ip, 46);
+      }
+    }
+    if (remote_port) {
+      *remote_port = ntohs(addr6->sin6_port);
+    }
+  } else {
+    struct sockaddr_in *addr4 = (struct sockaddr_in *)&client_addr;
+    if (remote_ip) {
+      inet_ntop(AF_INET, &addr4->sin_addr, remote_ip, 46);
+    }
+    if (remote_port) {
+      *remote_port = ntohs(addr4->sin_port);
+    }
   }
 
   return client_fd;
@@ -330,6 +401,60 @@ int ak_tcp_socket_set_keepalive(ak_socket_fd_t fd, int idle_sec,
   }
 
   return 0;
+}
+
+int ak_tcp_socket_set_linger(ak_socket_fd_t fd, bool enable, int timeout_sec,
+                             const char **error) {
+  struct linger lg;
+  lg.l_onoff = enable ? 1 : 0;
+  lg.l_linger = timeout_sec;
+
+  if (setsockopt(fd, SOL_SOCKET, SO_LINGER, &lg, sizeof(lg)) < 0) {
+    if (error) {
+      *error = strerror(errno);
+    }
+    return -1;
+  }
+  return 0;
+}
+
+int ak_tcp_socket_set_buffers(ak_socket_fd_t fd, size_t recv_size,
+                              size_t send_size, const char **error) {
+  if (recv_size > 0) {
+    int size = (int)recv_size;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size)) < 0) {
+      if (error) {
+        *error = strerror(errno);
+      }
+      return -1;
+    }
+  }
+  if (send_size > 0) {
+    int size = (int)send_size;
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size)) < 0) {
+      if (error) {
+        *error = strerror(errno);
+      }
+      return -1;
+    }
+  }
+  return 0;
+}
+
+int ak_tcp_socket_poll_read(ak_socket_fd_t fd, int timeout_ms) {
+  struct pollfd pfd;
+  pfd.fd = fd;
+  pfd.events = POLLIN;
+  pfd.revents = 0;
+
+  int ret = poll(&pfd, 1, timeout_ms);
+  if (ret < 0) {
+    return -1;
+  }
+  if (ret == 0) {
+    return 0; // Timeout
+  }
+  return 1; // Ready
 }
 
 void ak_tcp_socket_shutdown(ak_socket_fd_t fd) {

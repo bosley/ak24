@@ -4,7 +4,10 @@
 # This CMakeLists.txt is only for tests.
 
 # Runtime tests
-add_executable(ak24_tcp_runtime_tests test/runtime_tests.c)
+add_executable(ak24_tcp_runtime_tests
+    test/runtime_tests.c
+    test/hardening_tests.c
+)
 target_include_directories(ak24_tcp_runtime_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/kernel

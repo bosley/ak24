@@ -27,6 +27,11 @@ typedef int ak_socket_fd_t;
 #define AK_INVALID_SOCKET -1
 #endif
 
+#if AK24_TLS_ENABLED
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+#endif
+
 // ============================================================================
 // Internal Data Structures
 // ============================================================================
@@ -47,6 +52,10 @@ struct ak_tcp_ctx_s {
   // Timeout settings (milliseconds, 0 = no timeout)
   uint32_t recv_timeout_ms; /**< Receive timeout */
   uint32_t send_timeout_ms; /**< Send timeout */
+
+#if AK24_TLS_ENABLED
+  SSL *ssl; /**< OpenSSL connection state (NULL if plaintext) */
+#endif
 };
 
 /**
@@ -131,6 +140,12 @@ typedef struct ak_tcp_server_internal_s {
   ak_lambda_t *on_connect;    /**< Connection accept callback */
   ak_lambda_t *on_handle;     /**< Connection handler callback */
   ak_lambda_t *on_disconnect; /**< Disconnect callback */
+
+#if AK24_TLS_ENABLED
+  SSL_CTX *ssl_ctx;   /**< OpenSSL context (NULL if no TLS) */
+  bool use_tls;       /**< TLS enabled for this server */
+  bool verify_client; /**< Require client certificates */
+#endif
 } ak_tcp_server_internal_t;
 
 /**
@@ -409,5 +424,103 @@ ak_tcp_ctx_t *ak_tcp_ctx_new(ak_socket_fd_t socket_fd, const char *remote_ip,
  * @param ctx Context to free
  */
 void ak_tcp_ctx_free(ak_tcp_ctx_t *ctx);
+
+// ============================================================================
+// TLS Functions (only available when AK24_TLS_ENABLED)
+// ============================================================================
+
+#if AK24_TLS_ENABLED
+
+/**
+ * @brief Initialize OpenSSL library (called once at startup)
+ */
+void ak_tcp_tls_init(void);
+
+/**
+ * @brief Cleanup OpenSSL library (called at shutdown)
+ */
+void ak_tcp_tls_deinit(void);
+
+/**
+ * @brief Create SSL context for server
+ *
+ * @param cert_file Path to PEM certificate
+ * @param key_file Path to PEM private key
+ * @param ca_file Path to CA certificate (NULL for no client auth)
+ * @param verify_client Require client certificates
+ * @param ciphers Cipher list (NULL for defaults)
+ * @param min_version Minimum TLS version (0 = TLS 1.2)
+ * @param error Output error message
+ * @return SSL_CTX or NULL on failure
+ */
+SSL_CTX *ak_tcp_tls_ctx_new(const char *cert_file, const char *key_file,
+                            const char *ca_file, bool verify_client,
+                            const char *ciphers, int min_version,
+                            const char **error);
+
+/**
+ * @brief Free SSL context
+ *
+ * @param ctx SSL context to free
+ */
+void ak_tcp_tls_ctx_free(SSL_CTX *ctx);
+
+/**
+ * @brief Perform TLS handshake on accepted connection
+ *
+ * @param ssl_ctx Server SSL context
+ * @param socket_fd Client socket
+ * @param error Output error message
+ * @return SSL connection or NULL on failure
+ */
+SSL *ak_tcp_tls_accept(SSL_CTX *ssl_ctx, ak_socket_fd_t socket_fd,
+                       const char **error);
+
+/**
+ * @brief Send data over TLS connection
+ *
+ * @param ssl SSL connection
+ * @param data Data to send
+ * @param len Data length
+ * @param error Output error message
+ * @return Bytes sent or -1 on failure
+ */
+ssize_t ak_tcp_tls_send(SSL *ssl, const uint8_t *data, size_t len,
+                        const char **error);
+
+/**
+ * @brief Receive data over TLS connection
+ *
+ * @param ssl SSL connection
+ * @param buffer Receive buffer
+ * @param len Buffer length
+ * @param error Output error message
+ * @return Bytes received, 0 on close, -1 on failure
+ */
+ssize_t ak_tcp_tls_recv(SSL *ssl, uint8_t *buffer, size_t len,
+                        const char **error);
+
+/**
+ * @brief Shutdown TLS connection gracefully
+ *
+ * @param ssl SSL connection
+ */
+void ak_tcp_tls_shutdown(SSL *ssl);
+
+/**
+ * @brief Free SSL connection
+ *
+ * @param ssl SSL connection
+ */
+void ak_tcp_tls_free(SSL *ssl);
+
+/**
+ * @brief Get last OpenSSL error as string
+ *
+ * @return Error string (static buffer, do not free)
+ */
+const char *ak_tcp_tls_error_string(void);
+
+#endif // AK24_TLS_ENABLED
 
 #endif // AK24_TCP_INTERNAL_H

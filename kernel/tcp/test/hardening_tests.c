@@ -592,6 +592,345 @@ static int test_dual_stack(void) {
   AK24_TEST_PASS();
 }
 
+#if AK24_TLS_ENABLED
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/x509.h>
+
+static int generate_test_cert(const char *cert_path, const char *key_path) {
+  EVP_PKEY *pkey = NULL;
+  EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+  if (!pctx) {
+    return -1;
+  }
+
+  if (EVP_PKEY_keygen_init(pctx) <= 0) {
+    EVP_PKEY_CTX_free(pctx);
+    return -1;
+  }
+
+  if (EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, 2048) <= 0) {
+    EVP_PKEY_CTX_free(pctx);
+    return -1;
+  }
+
+  if (EVP_PKEY_keygen(pctx, &pkey) <= 0) {
+    EVP_PKEY_CTX_free(pctx);
+    return -1;
+  }
+  EVP_PKEY_CTX_free(pctx);
+
+  X509 *x509 = X509_new();
+  if (!x509) {
+    EVP_PKEY_free(pkey);
+    return -1;
+  }
+
+  ASN1_INTEGER_set(X509_get_serialNumber(x509), 1);
+  X509_gmtime_adj(X509_get_notBefore(x509), 0);
+  X509_gmtime_adj(X509_get_notAfter(x509), 31536000L);
+  X509_set_pubkey(x509, pkey);
+
+  X509_NAME *name = X509_get_subject_name(x509);
+  X509_NAME_add_entry_by_txt(name, "C", MBSTRING_ASC, (unsigned char *)"US", -1,
+                             -1, 0);
+  X509_NAME_add_entry_by_txt(name, "O", MBSTRING_ASC,
+                             (unsigned char *)"AK24 Test", -1, -1, 0);
+  X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
+                             (unsigned char *)"localhost", -1, -1, 0);
+  X509_set_issuer_name(x509, name);
+
+  if (X509_sign(x509, pkey, EVP_sha256()) == 0) {
+    X509_free(x509);
+    EVP_PKEY_free(pkey);
+    return -1;
+  }
+
+  FILE *f = fopen(key_path, "wb");
+  if (!f) {
+    X509_free(x509);
+    EVP_PKEY_free(pkey);
+    return -1;
+  }
+  PEM_write_PrivateKey(f, pkey, NULL, NULL, 0, NULL, NULL);
+  fclose(f);
+
+  f = fopen(cert_path, "wb");
+  if (!f) {
+    X509_free(x509);
+    EVP_PKEY_free(pkey);
+    return -1;
+  }
+  PEM_write_X509(f, x509);
+  fclose(f);
+
+  X509_free(x509);
+  EVP_PKEY_free(pkey);
+  return 0;
+}
+
+static int tls_client_connect(hardening_test_client_t *client,
+                              SSL_CTX **out_ctx, SSL **out_ssl, uint16_t port) {
+  if (h_client_connect(client, port) != 0) {
+    return -1;
+  }
+
+  SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+  if (!ctx) {
+    h_client_disconnect(client);
+    return -1;
+  }
+
+  SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+
+  SSL *ssl = SSL_new(ctx);
+  if (!ssl) {
+    SSL_CTX_free(ctx);
+    h_client_disconnect(client);
+    return -1;
+  }
+
+  SSL_set_fd(ssl, (int)client->sock);
+  if (SSL_connect(ssl) != 1) {
+    SSL_free(ssl);
+    SSL_CTX_free(ctx);
+    h_client_disconnect(client);
+    return -1;
+  }
+
+  *out_ctx = ctx;
+  *out_ssl = ssl;
+  return 0;
+}
+
+static void tls_client_disconnect(hardening_test_client_t *client, SSL_CTX *ctx,
+                                  SSL *ssl) {
+  if (ssl) {
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+  }
+  if (ctx) {
+    SSL_CTX_free(ctx);
+  }
+  h_client_disconnect(client);
+}
+
+static int test_tls_available(void) {
+  printf("Test: TLS availability check\n");
+
+  bool available = ak_tcp_tls_available();
+  printf("  TLS available: %s\n", available ? "yes" : "no");
+  AK24_TEST_ASSERT(available);
+
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_tls_server_create(void) {
+  printf("Test: TLS server creation\n");
+
+  const char *cert_path = "/tmp/ak24_test.crt";
+  const char *key_path = "/tmp/ak24_test.key";
+
+  if (generate_test_cert(cert_path, key_path) != 0) {
+    printf("  Failed to generate test certificate\n");
+    return 1;
+  }
+
+  const char *error = NULL;
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = HARDENING_TEST_PORT + 50;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+  cfg.use_tls = true;
+  cfg.cert_file = cert_path;
+  cfg.key_file = key_path;
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  unlink(cert_path);
+  unlink(key_path);
+
+  printf("  TLS server created and started successfully\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_tls_handshake(void) {
+  printf("Test: TLS handshake and data transfer\n");
+
+  const char *cert_path = "/tmp/ak24_test.crt";
+  const char *key_path = "/tmp/ak24_test.key";
+
+  if (generate_test_cert(cert_path, key_path) != 0) {
+    printf("  Failed to generate test certificate\n");
+    return 1;
+  }
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 51;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+  cfg.use_tls = true;
+  cfg.cert_file = cert_path;
+  cfg.key_file = key_path;
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  SSL_CTX *ssl_ctx = NULL;
+  SSL *ssl = NULL;
+
+  if (tls_client_connect(&client, &ssl_ctx, &ssl, port) != 0) {
+    ak_tcp_server_stop(server);
+    ak_tcp_server_free(server);
+    unlink(cert_path);
+    unlink(key_path);
+    printf("  TLS client connection failed\n");
+    return 1;
+  }
+
+  const char *test_msg = "Hello TLS!\n";
+  int written = SSL_write(ssl, test_msg, (int)strlen(test_msg));
+  AK24_TEST_ASSERT(written > 0);
+
+  char response[64] = {0};
+  int read_bytes = SSL_read(ssl, response, sizeof(response) - 1);
+  AK24_TEST_ASSERT(read_bytes > 0);
+
+  printf("  Sent: %s  Received: %s", test_msg, response);
+  AK24_TEST_ASSERT_EQ(strcmp(test_msg, response), 0);
+
+  tls_client_disconnect(&client, ssl_ctx, ssl);
+  usleep(50000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  unlink(cert_path);
+  unlink(key_path);
+
+  printf("  TLS handshake and encrypted echo verified\n");
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_tls_data_integrity(void) {
+  printf("Test: TLS data integrity (large payload)\n");
+
+  const char *cert_path = "/tmp/ak24_test.crt";
+  const char *key_path = "/tmp/ak24_test.key";
+
+  if (generate_test_cert(cert_path, key_path) != 0) {
+    printf("  Failed to generate test certificate\n");
+    return 1;
+  }
+
+  const char *error = NULL;
+  const uint16_t port = HARDENING_TEST_PORT + 52;
+
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = port;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+  cfg.use_tls = true;
+  cfg.cert_file = cert_path;
+  cfg.key_file = key_path;
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT_NOT_NULL(server);
+  AK24_TEST_ASSERT_EQ(ak_tcp_server_start(server, &error), 0);
+  usleep(50000);
+
+  hardening_test_client_t client = {0};
+  SSL_CTX *ssl_ctx = NULL;
+  SSL *ssl = NULL;
+
+  if (tls_client_connect(&client, &ssl_ctx, &ssl, port) != 0) {
+    ak_tcp_server_stop(server);
+    ak_tcp_server_free(server);
+    unlink(cert_path);
+    unlink(key_path);
+    printf("  TLS client connection failed\n");
+    return 1;
+  }
+
+  char large_msg[4096];
+  for (size_t i = 0; i < sizeof(large_msg) - 2; i++) {
+    large_msg[i] = 'A' + (i % 26);
+  }
+  large_msg[sizeof(large_msg) - 2] = '\n';
+  large_msg[sizeof(large_msg) - 1] = '\0';
+
+  int written = SSL_write(ssl, large_msg, (int)strlen(large_msg));
+  AK24_TEST_ASSERT(written > 0);
+
+  char response[4096] = {0};
+  size_t total_read = 0;
+  while (total_read < strlen(large_msg)) {
+    int read_bytes =
+        SSL_read(ssl, response + total_read, sizeof(response) - 1 - total_read);
+    if (read_bytes <= 0) {
+      break;
+    }
+    total_read += read_bytes;
+  }
+
+  AK24_TEST_ASSERT_EQ(total_read, strlen(large_msg));
+  AK24_TEST_ASSERT_EQ(memcmp(large_msg, response, total_read), 0);
+
+  tls_client_disconnect(&client, ssl_ctx, ssl);
+  usleep(50000);
+  ak_tcp_server_stop(server);
+  ak_tcp_server_free(server);
+
+  unlink(cert_path);
+  unlink(key_path);
+
+  printf("  Verified %zu bytes through TLS\n", total_read);
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+
+static int test_tls_missing_cert(void) {
+  printf("Test: TLS server rejects missing certificate\n");
+
+  const char *error = NULL;
+  ak_tcp_server_config_t cfg = ak_tcp_server_config_default();
+  cfg.bind_addr = "127.0.0.1";
+  cfg.port = HARDENING_TEST_PORT + 53;
+  cfg.on_connect = ak_lambda_new(on_connect_accept, NULL, NULL);
+  cfg.on_handle = ak_lambda_new(on_handle_echo_simple, NULL, NULL);
+  cfg.use_tls = true;
+  cfg.cert_file = NULL;
+  cfg.key_file = NULL;
+
+  ak_tcp_server_t *server = ak_tcp_server_new(&cfg, &error);
+  AK24_TEST_ASSERT(server == NULL);
+  AK24_TEST_ASSERT(error != NULL);
+  printf("  Correctly rejected: %s\n", error);
+
+  printf("  PASSED\n");
+  AK24_TEST_PASS();
+}
+#endif
+
 int run_tcp_hardening_tests(void) {
   printf("\n--- Production Hardening Tests ---\n\n");
   AK24_TEST_RUN(test_recv_until_max_size);
@@ -604,5 +943,17 @@ int run_tcp_hardening_tests(void) {
   AK24_TEST_RUN(test_socket_buffer_sizes);
   AK24_TEST_RUN(test_ipv6_connection);
   AK24_TEST_RUN(test_dual_stack);
+
+#if AK24_TLS_ENABLED
+  printf("\n--- TLS Tests ---\n\n");
+  AK24_TEST_RUN(test_tls_available);
+  AK24_TEST_RUN(test_tls_server_create);
+  AK24_TEST_RUN(test_tls_handshake);
+  AK24_TEST_RUN(test_tls_data_integrity);
+  AK24_TEST_RUN(test_tls_missing_cert);
+#else
+  printf("\n--- TLS Tests (SKIPPED - OpenSSL not available) ---\n\n");
+#endif
+
   return 0;
 }

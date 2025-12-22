@@ -40,9 +40,23 @@ const char *ak_tcp_error_string(ak_tcp_error_t err) {
     return "Task queue full";
   case AK_TCP_ERR_RATE_LIMIT:
     return "Rate limit exceeded";
+  case AK_TCP_ERR_TLS_INIT:
+    return "TLS initialization failed";
+  case AK_TCP_ERR_TLS_CERT:
+    return "TLS certificate error";
+  case AK_TCP_ERR_TLS_HANDSHAKE:
+    return "TLS handshake failed";
   default:
     return "Unknown error";
   }
+}
+
+bool ak_tcp_tls_available(void) {
+#if AK24_TLS_ENABLED
+  return true;
+#else
+  return false;
+#endif
 }
 
 ak_tcp_server_config_t ak_tcp_server_config_default(void) {
@@ -76,9 +90,19 @@ ak_tcp_server_config_t ak_tcp_server_config_default(void) {
   return cfg;
 }
 
-void ak_tcp_init(void) { ak_tcp_platform_init(); }
+void ak_tcp_init(void) {
+  ak_tcp_platform_init();
+#if AK24_TLS_ENABLED
+  ak_tcp_tls_init();
+#endif
+}
 
-void ak_tcp_deinit(void) { ak_tcp_platform_deinit(); }
+void ak_tcp_deinit(void) {
+#if AK24_TLS_ENABLED
+  ak_tcp_tls_deinit();
+#endif
+  ak_tcp_platform_deinit();
+}
 
 ak_tcp_ctx_t *ak_tcp_ctx_new(ak_socket_fd_t socket_fd, const char *remote_ip,
                              uint16_t remote_port, size_t recv_buf_size,
@@ -138,6 +162,14 @@ void ak_tcp_ctx_free(ak_tcp_ctx_t *ctx) {
     return;
   }
 
+#if AK24_TLS_ENABLED
+  if (ctx->ssl) {
+    ak_tcp_tls_shutdown(ctx->ssl);
+    ak_tcp_tls_free(ctx->ssl);
+    ctx->ssl = NULL;
+  }
+#endif
+
   if (ctx->socket_fd != AK_INVALID_SOCKET) {
     ak_tcp_socket_close(ctx->socket_fd);
   }
@@ -181,9 +213,26 @@ ssize_t ak_tcp_send(ak_tcp_ctx_t *ctx, const ak_buffer_t *data,
   size_t to_send = ak_buffer_count((ak_buffer_t *)data);
   const uint8_t *ptr = ak_buffer_data((ak_buffer_t *)data);
 
+#if AK24_TLS_ENABLED
+  AK24_MUTEX_LOCK(&ctx->mutex);
+  SSL *ssl = ctx->ssl;
+  AK24_MUTEX_UNLOCK(&ctx->mutex);
+#endif
+
   while (total_sent < to_send) {
-    ssize_t sent =
+    ssize_t sent;
+#if AK24_TLS_ENABLED
+    if (ssl) {
+      sent =
+          ak_tcp_tls_send(ssl, ptr + total_sent, to_send - total_sent, error);
+    } else {
+      sent =
+          ak_tcp_socket_send(fd, ptr + total_sent, to_send - total_sent, error);
+    }
+#else
+    sent =
         ak_tcp_socket_send(fd, ptr + total_sent, to_send - total_sent, error);
+#endif
     if (sent < 0) {
       return -1;
     }
@@ -226,7 +275,22 @@ ssize_t ak_tcp_recv(ak_tcp_ctx_t *ctx, ak_buffer_t *buffer, size_t max_bytes,
   size_t to_recv =
       max_bytes < TCP_RECV_CHUNK_SIZE ? max_bytes : TCP_RECV_CHUNK_SIZE;
 
-  ssize_t received = ak_tcp_socket_recv(fd, temp, to_recv, error);
+#if AK24_TLS_ENABLED
+  AK24_MUTEX_LOCK(&ctx->mutex);
+  SSL *ssl = ctx->ssl;
+  AK24_MUTEX_UNLOCK(&ctx->mutex);
+#endif
+
+  ssize_t received;
+#if AK24_TLS_ENABLED
+  if (ssl) {
+    received = ak_tcp_tls_recv(ssl, temp, to_recv, error);
+  } else {
+    received = ak_tcp_socket_recv(fd, temp, to_recv, error);
+  }
+#else
+  received = ak_tcp_socket_recv(fd, temp, to_recv, error);
+#endif
   if (received < 0) {
     return -1;
   }
@@ -299,6 +363,9 @@ ak_buffer_t *ak_tcp_recv_until(ak_tcp_ctx_t *ctx, const char *delim,
       break;
     }
     ak_socket_fd_t fd = ctx->socket_fd;
+#if AK24_TLS_ENABLED
+    SSL *ssl = ctx->ssl;
+#endif
     AK24_MUTEX_UNLOCK(&ctx->mutex);
 
     size_t to_read = TCP_RECV_CHUNK_SIZE;
@@ -310,7 +377,16 @@ ak_buffer_t *ak_tcp_recv_until(ak_tcp_ctx_t *ctx, const char *delim,
     }
 
     uint8_t temp[TCP_RECV_CHUNK_SIZE];
-    ssize_t received = ak_tcp_socket_recv(fd, temp, to_read, error);
+    ssize_t received;
+#if AK24_TLS_ENABLED
+    if (ssl) {
+      received = ak_tcp_tls_recv(ssl, temp, to_read, error);
+    } else {
+      received = ak_tcp_socket_recv(fd, temp, to_read, error);
+    }
+#else
+    received = ak_tcp_socket_recv(fd, temp, to_read, error);
+#endif
     if (received < 0) {
       ak_buffer_free(result);
       return NULL;
@@ -337,6 +413,21 @@ ak_buffer_t *ak_tcp_recv_until(ak_tcp_ctx_t *ctx, const char *delim,
   }
 
   return result;
+}
+
+bool ak_tcp_is_tls(ak_tcp_ctx_t *ctx) {
+#if AK24_TLS_ENABLED
+  if (!ctx) {
+    return false;
+  }
+  AK24_MUTEX_LOCK(&ctx->mutex);
+  bool is_tls = (ctx->ssl != NULL);
+  AK24_MUTEX_UNLOCK(&ctx->mutex);
+  return is_tls;
+#else
+  (void)ctx;
+  return false;
+#endif
 }
 
 bool ak_tcp_is_alive(ak_tcp_ctx_t *ctx) {
@@ -369,6 +460,13 @@ void ak_tcp_close(ak_tcp_ctx_t *ctx) {
   AK24_MUTEX_LOCK(&ctx->mutex);
   if (ctx->alive) {
     ctx->alive = false;
+#if AK24_TLS_ENABLED
+    if (ctx->ssl) {
+      ak_tcp_tls_shutdown(ctx->ssl);
+      ak_tcp_tls_free(ctx->ssl);
+      ctx->ssl = NULL;
+    }
+#endif
     if (ctx->socket_fd != AK_INVALID_SOCKET) {
       ak_tcp_socket_close(ctx->socket_fd);
       ctx->socket_fd = AK_INVALID_SOCKET;
@@ -469,6 +567,11 @@ void ak_tcp_shutdown(ak_tcp_ctx_t *ctx) {
 
   AK24_MUTEX_LOCK(&ctx->mutex);
   if (ctx->alive && ctx->socket_fd != AK_INVALID_SOCKET) {
+#if AK24_TLS_ENABLED
+    if (ctx->ssl) {
+      ak_tcp_tls_shutdown(ctx->ssl);
+    }
+#endif
     ak_tcp_socket_shutdown(ctx->socket_fd);
     ctx->alive = false;
   }
@@ -875,6 +978,19 @@ static void *accept_loop(void *arg) {
       continue;
     }
 
+#if AK24_TLS_ENABLED
+    if (server->use_tls && server->ssl_ctx) {
+      ctx->ssl = ak_tcp_tls_accept(server->ssl_ctx, client_fd, &error);
+      if (!ctx->ssl) {
+        ip_tracker_decrement(server, remote_ip);
+        ak_tcp_ctx_free(ctx);
+        AK24_LOG_WARN("TLS handshake failed for %s:%d - %s", remote_ip,
+                      remote_port, error ? error : "Unknown");
+        continue;
+      }
+    }
+#endif
+
     ctx->recv_timeout_ms = server->default_recv_timeout_ms;
     ctx->send_timeout_ms = server->default_send_timeout_ms;
 
@@ -1074,6 +1190,44 @@ ak_tcp_server_t *ak_tcp_server_new(const ak_tcp_server_config_t *cfg,
     return NULL;
   }
 
+#if AK24_TLS_ENABLED
+  if (cfg->use_tls) {
+    if (!cfg->cert_file || !cfg->key_file) {
+      ak_thread_pool_free(internal->thread_pool);
+      if (internal->bind_addr) {
+        AK24_FREE(internal->bind_addr);
+      }
+      AK24_MUTEX_DESTROY(&internal->mutex);
+      AK24_COND_DESTROY(&internal->shutdown_cond);
+      AK24_MUTEX_DESTROY(&internal->ip_tracker_mutex);
+      AK24_FREE(internal);
+      AK24_FREE(server);
+      if (error) {
+        *error = "TLS requires cert_file and key_file";
+      }
+      return NULL;
+    }
+
+    internal->ssl_ctx = ak_tcp_tls_ctx_new(
+        cfg->cert_file, cfg->key_file, cfg->ca_file, cfg->verify_client,
+        cfg->tls_ciphers, cfg->tls_min_version, error);
+    if (!internal->ssl_ctx) {
+      ak_thread_pool_free(internal->thread_pool);
+      if (internal->bind_addr) {
+        AK24_FREE(internal->bind_addr);
+      }
+      AK24_MUTEX_DESTROY(&internal->mutex);
+      AK24_COND_DESTROY(&internal->shutdown_cond);
+      AK24_MUTEX_DESTROY(&internal->ip_tracker_mutex);
+      AK24_FREE(internal);
+      AK24_FREE(server);
+      return NULL;
+    }
+    internal->use_tls = true;
+    internal->verify_client = cfg->verify_client;
+  }
+#endif
+
   return server;
 }
 
@@ -1195,6 +1349,13 @@ void ak_tcp_server_free(ak_tcp_server_t *server) {
     if (internal->thread_pool) {
       ak_thread_pool_free(internal->thread_pool);
     }
+
+#if AK24_TLS_ENABLED
+    if (internal->ssl_ctx) {
+      ak_tcp_tls_ctx_free(internal->ssl_ctx);
+      internal->ssl_ctx = NULL;
+    }
+#endif
 
     if (internal->on_connect) {
       ak_lambda_free(internal->on_connect);

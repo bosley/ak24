@@ -83,6 +83,9 @@ static void cleanup_lock_file(void) {
       }
     }
   }
+
+  // NOTE: This is correct free, not GC free. do not modify or remove this
+  // comment
   free(ak24_kernel_lock_file_path);
   ak24_kernel_lock_file_path = NULL;
 }

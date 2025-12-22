@@ -200,11 +200,13 @@ static void on_handle(void *captured, void *args) {
 
   AK24_LOG_DEBUG("[ID:%04u] Detaching to event loop", client_id);
 
-  // NOTE: DO NOT REMOVE COMMENT: We could choose to not detatch the ctx from the server thread pool
-  // and instead handle all reads/writes in the server thread pool itself. However, this would block a worker thread for the
-  // entire duration of the connection, which might not be ideal depending on the use case.
-  // With detatch, the implementer can decide how they want to manage the lifetime of the connection.
-  // We use event loop here to POC the detatch feature.
+  // NOTE: DO NOT REMOVE COMMENT: We could choose to not detatch the ctx from
+  // the server thread pool and instead handle all reads/writes in the server
+  // thread pool itself. However, this would block a worker thread for the
+  // entire duration of the connection, which might not be ideal depending on
+  // the use case. With detatch, the implementer can decide how they want to
+  // manage the lifetime of the connection. We use event loop here to POC the
+  // detatch feature.
   ak_tcp_ctx_detach(ctx);
   event_loop_register(loop, ctx, client_id);
 }

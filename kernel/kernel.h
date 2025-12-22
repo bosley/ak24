@@ -26,6 +26,7 @@
 #include "arena.h"
 #include "atom.h"
 #include "buffer.h"
+#include "cjit.h"
 #include "context.h"
 #include "filepath.h"
 #include "forms.h"

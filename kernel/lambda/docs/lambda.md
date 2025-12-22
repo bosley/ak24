@@ -31,7 +31,7 @@ ak_lambda_free(lambda);
 
 ```c
 void cleanup(void *ctx) {
-  free(ctx);
+  AK24_FREE(ctx);
 }
 
 void my_fn(void *captured, void *args) {

@@ -27,18 +27,10 @@
  * effects propagation and rendering state.
  */
 typedef struct {
-  bool active;           /**< Whether this entity is currently active */
-  bool needs_redraw;     /**< Dirty flag - entity needs to sync to cell */
-  uint32_t click_count;  /**< Number of times this entity was clicked */
-  uint32_t last_click_ms; /**< Timestamp of last click (for effects timing) */
-  ak_color_t color;      /**< Current entity color for rendering */
-
-  /* Effect state - for future effect propagation */
-  float effect_intensity; /**< Current effect intensity (0.0 - 1.0) */
-  float effect_decay;     /**< Effect decay rate per frame */
-
-  /* Neighbors affected - for future cascading effects */
-  bool propagate_effect;  /**< Whether to propagate effects to neighbors */
+  bool active;          /**< Whether this entity is currently active */
+  bool needs_redraw;    /**< Dirty flag - entity needs to sync to cell */
+  uint32_t click_count; /**< Number of times this entity was clicked */
+  ak_color_t color;     /**< Current entity color for rendering */
 } entity_data_t;
 
 // ============================================================================
@@ -73,11 +65,7 @@ static entity_data_t *entity_data_new(ak_color_t color) {
   data->active = true;
   data->needs_redraw = true;
   data->click_count = 1;
-  data->last_click_ms = 0; /* TODO: Get actual timestamp */
   data->color = color;
-  data->effect_intensity = 1.0f;
-  data->effect_decay = 0.05f;
-  data->propagate_effect = false;
 
   return data;
 }
@@ -149,12 +137,11 @@ static void ring_effect_fn(void *captured_ctx, void *invoke_args) {
     data->needs_redraw = true;
     data->click_count++;
     data->color = ctx->ring_color;
-    data->effect_intensity = 0.7f; /* Slightly dimmer for ring effect */
   }
 
   AK24_LOG_DEBUG("Ring effect: Entity %zu at [%d,%d] (distance %d, step %d)",
-                 entity->unique_id, entity->x, entity->y,
-                 iter->distance, iter->step);
+                 entity->unique_id, entity->x, entity->y, iter->distance,
+                 iter->step);
 }
 
 // ============================================================================
@@ -190,16 +177,12 @@ static void on_cell_click(ak_cell_ctx_t *cell, void *user_data) {
       data->active = false;
       data->needs_redraw = true;
       data->color = (ak_color_t){60, 60, 60, 255};
-      data->effect_intensity = 0.0f;
     }
   } else {
     /* Activate: Set highlight color based on region */
-    ak_color_t new_color = {
-        (uint8_t)(100 + (region * 37) % 155),
-        (uint8_t)(100 + (region * 73) % 155),
-        (uint8_t)(100 + (region * 111) % 155),
-        255
-    };
+    ak_color_t new_color = {(uint8_t)(100 + (region * 37) % 155),
+                            (uint8_t)(100 + (region * 73) % 155),
+                            (uint8_t)(100 + (region * 111) % 155), 255};
 
     if (!data) {
       /* First click - allocate entity data */
@@ -215,31 +198,26 @@ static void on_cell_click(ak_cell_ctx_t *cell, void *user_data) {
       data->needs_redraw = true;
       data->click_count++;
       data->color = new_color;
-      data->effect_intensity = 1.0f;
     }
 
     /* Trigger ring effect at distance 3 (no fill) */
     ring_effect_ctx_t ring_ctx = {
-        .ring_color = {
-            (uint8_t)(50 + (region * 53) % 200),
-            (uint8_t)(50 + (region * 97) % 200),
-            (uint8_t)(50 + (region * 131) % 200),
-            255
-        }
-    };
+        .ring_color = {(uint8_t)(50 + (region * 53) % 200),
+                       (uint8_t)(50 + (region * 97) % 200),
+                       (uint8_t)(50 + (region * 131) % 200), 255}};
 
     ak_lambda_t *ring_lambda = ak_lambda_new(ring_effect_fn, &ring_ctx, NULL);
     if (ring_lambda) {
-      entity_iterate_scalar_clockwise(entities, cell->x, cell->y,
-                                       3,      /* distance */
-                                       false,  /* is_filled = no fill, just ring */
-                                       ring_lambda);
+      entity_iterate_scalar_clockwise(
+          entities, cell->x, cell->y, 3, /* distance */
+          false,                         /* is_filled = no fill, just ring */
+          ring_lambda);
       ak_lambda_free(ring_lambda);
     }
   }
 
-  AK24_LOG_INFO("Entity %zu at [%d,%d] %s (clicks: %u)",
-                entity->unique_id, cell->x, cell->y,
+  AK24_LOG_INFO("Entity %zu at [%d,%d] %s (clicks: %u)", entity->unique_id,
+                cell->x, cell->y,
                 (data && data->active) ? "activated" : "deactivated",
                 data ? data->click_count : 0);
 }
@@ -253,7 +231,8 @@ static void on_grid_init(ak_cellgrid_t *g, void *user_data) {
   (void)user_data;
 
   int regions_x, regions_y;
-  ak_cellgrid_get_dimensions(g, &grid_cells_x, &grid_cells_y, &regions_x, &regions_y);
+  ak_cellgrid_get_dimensions(g, &grid_cells_x, &grid_cells_y, &regions_x,
+                             &regions_y);
 
   printf("Grid initialized:\n");
   printf("  Cells:   %dx%d (%d total)\n", grid_cells_x, grid_cells_y,
@@ -282,7 +261,8 @@ static void on_grid_init(ak_cellgrid_t *g, void *user_data) {
  */
 static void sync_cell_color(ak_cell_ctx_t *cell, void *user_data) {
   entity_data_t *data = (entity_data_t *)user_data;
-  if (!data) return;
+  if (!data)
+    return;
 
   ak_cell_fill_color(cell, data->color);
   ak_cell_set_clicked(cell, data->active);
@@ -295,7 +275,8 @@ static void sync_cell_color(ak_cell_ctx_t *cell, void *user_data) {
  * Called every frame. Iterates all entities and syncs those with
  * needs_redraw flag set to their corresponding cells.
  */
-static void on_frame_update(ak_cellgrid_t *g, void *user_data, uint32_t delta_ms) {
+static void on_frame_update(ak_cellgrid_t *g, void *user_data,
+                            uint32_t delta_ms) {
   (void)user_data;
   (void)delta_ms;
 
@@ -307,7 +288,8 @@ static void on_frame_update(ak_cellgrid_t *g, void *user_data, uint32_t delta_ms
   for (int y = 0; y < grid_cells_y; y++) {
     for (int x = 0; x < grid_cells_x; x++) {
       entity_t *entity = entity_grid_get(entities, x, y);
-      if (!entity) continue;
+      if (!entity)
+        continue;
 
       entity_data_t *data = (entity_data_t *)entity->data;
       if (data && data->needs_redraw) {

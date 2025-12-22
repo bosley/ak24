@@ -54,11 +54,12 @@ typedef enum {
  * manage the data pointer - that is the user's responsibility.
  */
 typedef struct entity_t {
-  size_t unique_id;                              /**< Unique entity identifier */
-  int x;                                         /**< Grid x coordinate */
-  int y;                                         /**< Grid y coordinate */
-  struct entity_t *spatial_mapping[ENTITY_DIRECTION_COUNT]; /**< Neighbor mappings */
-  void *data;                                    /**< User-defined data (NOT managed by entity system) */
+  size_t unique_id; /**< Unique entity identifier */
+  int x;            /**< Grid x coordinate */
+  int y;            /**< Grid y coordinate */
+  struct entity_t
+      *spatial_mapping[ENTITY_DIRECTION_COUNT]; /**< Neighbor mappings */
+  void *data; /**< User-defined data (NOT managed by entity system) */
 } entity_t;
 
 /**
@@ -67,11 +68,11 @@ typedef struct entity_t {
  * 2D array of entity pointers representing the main traversable plane.
  */
 typedef struct {
-  entity_t **entities;  /**< Flat array of entity pointers [y * width + x] */
-  int width;            /**< Grid width in entities */
-  int height;           /**< Grid height in entities */
-  size_t next_id;       /**< Next unique ID to assign */
-  bool wrap;            /**< Whether grid wraps at edges */
+  entity_t **entities; /**< Flat array of entity pointers [y * width + x] */
+  int width;           /**< Grid width in entities */
+  int height;          /**< Grid height in entities */
+  size_t next_id;      /**< Next unique ID to assign */
+  bool wrap;           /**< Whether grid wraps at edges */
 } entity_grid_t;
 
 /**
@@ -80,24 +81,26 @@ typedef struct {
  * Contains the entity being visited and iteration metadata.
  */
 typedef struct {
-  entity_t *entity;           /**< Current entity */
-  int x;                      /**< Entity x coordinate */
-  int y;                      /**< Entity y coordinate */
-  entity_direction_e from_dir; /**< Direction we came from (for neighbor iterations) */
-  int distance;               /**< Distance from origin (for scalar iterations) */
-  int step;                   /**< Current step in iteration */
-  bool stop;                  /**< Set to true to stop iteration early */
+  entity_t *entity; /**< Current entity */
+  int x;            /**< Entity x coordinate */
+  int y;            /**< Entity y coordinate */
+  entity_direction_e
+      from_dir; /**< Direction we came from (for neighbor iterations) */
+  int distance; /**< Distance from origin (for scalar iterations) */
+  int step;     /**< Current step in iteration */
+  bool stop;    /**< Set to true to stop iteration early */
 } entity_iter_ctx_t;
 
 /* ============================================================================
  * Grid Lifecycle
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * @brief Create a new entity grid
  *
- * Allocates grid and all entities. Entity data pointers are initialized to NULL.
- * Spatial mappings are automatically established based on grid position.
+ * Allocates grid and all entities. Entity data pointers are initialized to
+ * NULL. Spatial mappings are automatically established based on grid position.
  *
  * @param width Grid width in entities
  * @param height Grid height in entities
@@ -122,7 +125,8 @@ void entity_grid_free(entity_grid_t *grid);
 
 /* ============================================================================
  * Entity Access
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * @brief Get entity at grid position

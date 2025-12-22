@@ -18,6 +18,11 @@ add_library(entity STATIC
     entity.h
 )
 
+target_include_directories(entity PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}
+)
+
 target_include_directories(cellgrid PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}
@@ -27,6 +32,11 @@ target_include_directories(cellgrid PUBLIC
 target_link_libraries(cellgrid PUBLIC
     ak24_kernel
     ${SDL2_LIBRARIES}
+)
+
+target_link_libraries(entity PUBLIC
+    ak24_kernel
+
 )
 
 # SDL example executable

@@ -16,6 +16,7 @@ if(AK24_GC_ENABLED)
     FetchContent_MakeAvailable(bdwgc)
 
     if(TARGET gc)
+        target_compile_definitions(gc PRIVATE LARGE_CONFIG=1)
         target_compile_options(gc PRIVATE
             -Wno-deprecated-declarations
             -Wno-strict-prototypes

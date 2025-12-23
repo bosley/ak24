@@ -111,6 +111,7 @@ file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/src/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/box/src/*.c
 )
 
 # Add TCP sources (platform-specific handled below)
@@ -176,6 +177,7 @@ file(GLOB_RECURSE KERNEL_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/box/test/*.c
 )
 
 file(GLOB_RECURSE KERNEL_HEADERS
@@ -198,6 +200,7 @@ file(GLOB_RECURSE KERNEL_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/tcp/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/cjit/include/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/box/include/*.h
 )
 
 # Add TCP subdirectory (for tests only - sources are compiled into kernel)
@@ -234,6 +237,7 @@ target_include_directories(ak24_kernel PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include
     ${CMAKE_CURRENT_SOURCE_DIR}/tcp/include
     ${CMAKE_CURRENT_SOURCE_DIR}/cjit/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/box/include
     ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include
 )
 
@@ -306,6 +310,7 @@ file(GLOB_RECURSE ALL_COMPILE_TIME_TESTS
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/cjit/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/box/test/*.c
 )
 
 file(GLOB BUFFER_TEST_SOURCES

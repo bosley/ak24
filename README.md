@@ -38,6 +38,11 @@ Build the library:
 make
 ```
 
+Install the library:
+```bash
+make install
+```
+
 Run tests:
 ```bash
 ./ak24.sh test
@@ -52,6 +57,27 @@ Build with GC disabled:
 ```bash
 AK24_GC=OFF make
 ```
+
+### Using AK24 in Your Projects
+
+After installation, link against AK24 using one of these methods:
+
+**Using pkg-config:**
+```bash
+gcc myprogram.c $(pkg-config --cflags --libs ak24) -o myprogram
+```
+
+**Using ak24-config:**
+```bash
+gcc myprogram.c $(ak24-config --cflags --libs) -o myprogram
+```
+
+**Manual linking:**
+```bash
+gcc myprogram.c -I$AK24_HOME/include/ak24 -L$AK24_HOME/lib -lak24_kernel -lpthread -lssl -lcrypto -o myprogram
+```
+
+The static library bundles TCC and Boehm GC internally, so you only need to link system libraries (pthread, OpenSSL). For shared library builds, all dependencies are embedded.
 
 ### Documentation
 

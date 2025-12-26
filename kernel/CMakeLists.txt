@@ -425,6 +425,88 @@ install(TARGETS ak24_kernel
     RUNTIME DESTINATION bin
 )
 
+if(NOT AK24_BUILD_SHARED_KERNEL AND UNIX AND AK24_GC_ENABLED AND TARGET gc)
+    install(CODE "
+        set(KERNEL_LIB \"${CMAKE_INSTALL_PREFIX}/lib/libak24_kernel.a\")
+        set(GC_LIB \"$<TARGET_FILE:gc>\")
+        set(TCC_LIB \"${TCC_LIBRARY}\")
+        set(TEMP_DIR \"${CMAKE_BINARY_DIR}/bundle_temp\")
+
+        file(MAKE_DIRECTORY \"\${TEMP_DIR}\")
+
+        execute_process(
+            COMMAND ar x \"\${KERNEL_LIB}\"
+            WORKING_DIRECTORY \"\${TEMP_DIR}\"
+        )
+
+        file(MAKE_DIRECTORY \"\${TEMP_DIR}/gc\")
+        execute_process(
+            COMMAND ar x \"\${GC_LIB}\"
+            WORKING_DIRECTORY \"\${TEMP_DIR}/gc\"
+        )
+
+        file(MAKE_DIRECTORY \"\${TEMP_DIR}/tcc\")
+        execute_process(
+            COMMAND ar x \"\${TCC_LIB}\"
+            WORKING_DIRECTORY \"\${TEMP_DIR}/tcc\"
+        )
+
+        file(GLOB ALL_OBJS
+            \"\${TEMP_DIR}/*.o\"
+            \"\${TEMP_DIR}/gc/*.o\"
+            \"\${TEMP_DIR}/tcc/*.o\"
+        )
+
+        execute_process(
+            COMMAND ar rcs \"\${KERNEL_LIB}\" \${ALL_OBJS}
+        )
+
+        execute_process(
+            COMMAND ranlib \"\${KERNEL_LIB}\"
+        )
+
+        file(REMOVE_RECURSE \"\${TEMP_DIR}\")
+
+        message(STATUS \"Bundled gc and tcc into libak24_kernel.a\")
+    ")
+elseif(NOT AK24_BUILD_SHARED_KERNEL AND UNIX)
+    install(CODE "
+        set(KERNEL_LIB \"${CMAKE_INSTALL_PREFIX}/lib/libak24_kernel.a\")
+        set(TCC_LIB \"${TCC_LIBRARY}\")
+        set(TEMP_DIR \"${CMAKE_BINARY_DIR}/bundle_temp\")
+
+        file(MAKE_DIRECTORY \"\${TEMP_DIR}\")
+
+        execute_process(
+            COMMAND ar x \"\${KERNEL_LIB}\"
+            WORKING_DIRECTORY \"\${TEMP_DIR}\"
+        )
+
+        file(MAKE_DIRECTORY \"\${TEMP_DIR}/tcc\")
+        execute_process(
+            COMMAND ar x \"\${TCC_LIB}\"
+            WORKING_DIRECTORY \"\${TEMP_DIR}/tcc\"
+        )
+
+        file(GLOB ALL_OBJS
+            \"\${TEMP_DIR}/*.o\"
+            \"\${TEMP_DIR}/tcc/*.o\"
+        )
+
+        execute_process(
+            COMMAND ar rcs \"\${KERNEL_LIB}\" \${ALL_OBJS}
+        )
+
+        execute_process(
+            COMMAND ranlib \"\${KERNEL_LIB}\"
+        )
+
+        file(REMOVE_RECURSE \"\${TEMP_DIR}\")
+
+        message(STATUS \"Bundled tcc into libak24_kernel.a\")
+    ")
+endif()
+
 # Install kernel headers
 install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel.h

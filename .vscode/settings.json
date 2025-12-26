@@ -43,5 +43,6 @@
         "AK24_GC_ENABLED=1"
     ],
     "C_Cpp.default.cStandard": "c11",
-    "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: LLVM, IndentWidth: 2, ColumnLimit: 80 }"
+    "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: LLVM, IndentWidth: 2, ColumnLimit: 80 }",
+    "makefile.configureOnOpen": false
 }

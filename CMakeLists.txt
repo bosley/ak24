@@ -154,6 +154,24 @@ else()
 endif()
 install(FILES "${AK24_BUILD_CONFIG_FILE}" DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
 
+set(PKG_CONFIG_FILE "${CMAKE_BINARY_DIR}/ak24.pc")
+file(WRITE "${PKG_CONFIG_FILE}" "prefix=${CMAKE_INSTALL_PREFIX}\n")
+file(APPEND "${PKG_CONFIG_FILE}" "exec_prefix=\${prefix}\n")
+file(APPEND "${PKG_CONFIG_FILE}" "libdir=\${prefix}/lib\n")
+file(APPEND "${PKG_CONFIG_FILE}" "includedir=\${prefix}/include\n\n")
+file(APPEND "${PKG_CONFIG_FILE}" "Name: ak24\n")
+file(APPEND "${PKG_CONFIG_FILE}" "Description: AK24 Kernel Library\n")
+file(APPEND "${PKG_CONFIG_FILE}" "Version: ${PROJECT_VERSION}\n")
+file(APPEND "${PKG_CONFIG_FILE}" "Cflags: -I\${includedir}/ak24\n")
+if(AK24_BUILD_SHARED_KERNEL)
+    file(APPEND "${PKG_CONFIG_FILE}" "Libs: -L\${libdir} -lak24_kernel\n")
+else()
+    file(APPEND "${PKG_CONFIG_FILE}" "Libs: -L\${libdir} -lak24_kernel -lpthread -lssl -lcrypto\n")
+endif()
+install(FILES "${PKG_CONFIG_FILE}" DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig")
+
+install(PROGRAMS "${CMAKE_SOURCE_DIR}/ak24-config" DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")
+
 # Add uninstall target
 if(NOT TARGET uninstall)
     configure_file(

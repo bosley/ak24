@@ -22,6 +22,7 @@ option(AK24_GC_ENABLED "Enable Boehm GC for memory management" ON)
 option(AK24_BUILD_DEBUG_MEMORY "Enable memory tracking and statistics" OFF)
 option(AK24_BUILD_SHARED_KERNEL "Build kernel as shared library" OFF)
 option(AK24_BUILD_DOCS "Build API documentation with Doxygen" OFF)
+option(AK24_BUILD_TESTS "Build and run compile-time tests" ON)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)

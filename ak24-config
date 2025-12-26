@@ -1,0 +1,37 @@
+#!/bin/sh
+
+if [ -z "$AK24_HOME" ]; then
+    AK24_HOME="$HOME/.ak24"
+fi
+
+usage() {
+    echo "Usage: ak24-config [--cflags] [--libs] [--version]"
+    exit 1
+}
+
+if [ $# -eq 0 ]; then
+    usage
+fi
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --cflags)
+            echo "-I${AK24_HOME}/include/ak24"
+            ;;
+        --libs)
+            echo "-L${AK24_HOME}/lib -lak24_kernel -lpthread -lssl -lcrypto"
+            ;;
+        --version)
+            if [ -f "${AK24_HOME}/lib/ak24-config.mk" ]; then
+                grep "AK24_VERSION=" "${AK24_HOME}/lib/ak24-config.mk" | cut -d= -f2
+            else
+                echo "unknown"
+            fi
+            ;;
+        *)
+            usage
+            ;;
+    esac
+    shift
+done
+

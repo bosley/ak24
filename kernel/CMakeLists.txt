@@ -102,7 +102,6 @@ file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/context/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lambda/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/src/*.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/atoms/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/*.c
@@ -114,13 +113,6 @@ file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/box/src/*.c
 )
-
-# Add TCP sources (platform-specific handled below)
-list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tcp/src/tcp.c)
-list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tcp/src/tcp_client.c)
-
-# Add TLS support (compiled in when OpenSSL found, code is #ifdef guarded)
-list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tcp/src/tcp_tls.c)
 
 # Add base kernel sources (non-platform/GC specific)
 list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/kernel.c)
@@ -134,16 +126,12 @@ if(WIN32)
     )
     # Add Windows-specific kernel sources
     list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/win.c)
-    # Add Windows-specific TCP sources
-    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tcp/src/tcp_win.c)
 else()
     file(GLOB THREADS_PLATFORM_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/threads/src/nix/*.c
     )
     # Add POSIX-specific kernel sources
     list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/posix.c)
-    # Add POSIX-specific TCP sources
-    list(APPEND KERNEL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tcp/src/tcp_posix.c)
 endif()
 
 # Exclude platform-specific directories from main glob
@@ -169,7 +157,6 @@ file(GLOB_RECURSE KERNEL_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/context/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lambda/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/test/*.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/atoms/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/threads/test/*.c
@@ -189,7 +176,6 @@ file(GLOB_RECURSE KERNEL_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/context/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/lambda/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/include/*.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/atoms/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/threads/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include/*.h
@@ -199,13 +185,9 @@ file(GLOB_RECURSE KERNEL_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include/*.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/tcp/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/cjit/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/box/include/*.h
 )
-
-# Add TCP subdirectory (for tests only - sources are compiled into kernel)
-add_subdirectory(tcp)
 
 if(AK24_BUILD_SHARED_KERNEL)
     add_library(ak24_kernel SHARED ${KERNEL_SOURCES})
@@ -226,7 +208,6 @@ target_include_directories(ak24_kernel PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/context/include
     ${CMAKE_CURRENT_SOURCE_DIR}/lambda/include
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/atoms/include
     ${CMAKE_CURRENT_SOURCE_DIR}/threads/include
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include
@@ -236,7 +217,7 @@ target_include_directories(ak24_kernel PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/include
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/include
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/tcp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/utf8/include
     ${CMAKE_CURRENT_SOURCE_DIR}/cjit/include
     ${CMAKE_CURRENT_SOURCE_DIR}/box/include
     ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include
@@ -301,7 +282,6 @@ file(GLOB_RECURSE ALL_COMPILE_TIME_TESTS
     ${CMAKE_CURRENT_SOURCE_DIR}/map/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/context/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/buffer/test/*.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/atoms/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/threads/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/test/*.c
@@ -529,7 +509,6 @@ install(DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/lambda/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/arbuff/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/threads/include/
-    ${CMAKE_CURRENT_SOURCE_DIR}/atoms/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/scanner/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/forms/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/log/include/
@@ -537,7 +516,6 @@ install(DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/arena/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/sourceloc/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/include/
-    ${CMAKE_CURRENT_SOURCE_DIR}/tcp/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/cjit/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include/
     DESTINATION include/ak24

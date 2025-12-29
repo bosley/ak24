@@ -24,7 +24,6 @@
 
 #include "arbuff.h"
 #include "arena.h"
-#include "atom.h"
 #include "buffer.h"
 #include "cjit.h"
 #include "context.h"
@@ -39,9 +38,6 @@
 #include "map.h"
 #include "scanner.h"
 #include "sourceloc.h"
-
-#include "tcp.h"
-#include "tcp_client.h"
 
 #include <stddef.h>
 #include <time.h>

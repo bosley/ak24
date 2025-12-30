@@ -18,16 +18,15 @@ typedef struct {
 } edge_t;
 
 typedef struct {
+  vec3_t offset;
+} step_t;
+
+typedef struct {
   char name[64];
   int start_vertex;
   int vertex_count;
+  list_t(step_t) steps;
 } object_t;
-
-typedef struct {
-  char object_name[64];
-  vec3_t offset;
-  int frame;
-} frame_command_t;
 
 typedef struct {
   SDL_Window *window;
@@ -41,7 +40,6 @@ typedef struct {
   list_t(vec3_t) base_vertices;
   list_t(edge_t) edges;
   list_t(object_t) objects;
-  list_t(frame_command_t) frame_commands;
   int current_frame;
   int max_frame;
   bool auto_play;
@@ -80,26 +78,16 @@ static void add_edge(int v1, int v2) {
 }
 
 static void clear_objects(void) {
+  for (unsigned i = 0; i < list_count(&g_state->objects); i++) {
+    object_t *obj = list_get(&g_state->objects, i);
+    list_deinit(&obj->steps);
+  }
   list_clear(&g_state->vertices);
   list_clear(&g_state->base_vertices);
   list_clear(&g_state->edges);
   list_clear(&g_state->objects);
-}
-
-static void clear_frame_commands(void) {
-  list_clear(&g_state->frame_commands);
   g_state->max_frame = 0;
   g_state->current_frame = 0;
-}
-
-static object_t *find_object(const char *name) {
-  for (unsigned i = 0; i < list_count(&g_state->objects); i++) {
-    object_t *obj = list_get(&g_state->objects, i);
-    if (strcmp(obj->name, name) == 0) {
-      return obj;
-    }
-  }
-  return NULL;
 }
 
 static void apply_frame_commands_up_to(int frame) {
@@ -109,21 +97,22 @@ static void apply_frame_commands_up_to(int frame) {
     *current = *base;
   }
 
-  for (unsigned i = 0; i < list_count(&g_state->frame_commands); i++) {
-    frame_command_t *cmd = list_get(&g_state->frame_commands, i);
-    if (cmd->frame > frame)
-      continue;
+  for (unsigned obj_idx = 0; obj_idx < list_count(&g_state->objects);
+       obj_idx++) {
+    object_t *obj = list_get(&g_state->objects, obj_idx);
 
-    object_t *obj = find_object(cmd->object_name);
-    if (!obj)
-      continue;
+    for (int step_idx = 0;
+         step_idx <= frame && step_idx < (int)list_count(&obj->steps);
+         step_idx++) {
+      step_t *step = list_get(&obj->steps, step_idx);
 
-    for (int v = 0; v < obj->vertex_count; v++) {
-      int idx = obj->start_vertex + v;
-      vec3_t *vert = list_get(&g_state->vertices, idx);
-      vert->x += cmd->offset.x;
-      vert->y += cmd->offset.y;
-      vert->z += cmd->offset.z;
+      for (int v = 0; v < obj->vertex_count; v++) {
+        int idx = obj->start_vertex + v;
+        vec3_t *vert = list_get(&g_state->vertices, idx);
+        vert->x += step->offset.x;
+        vert->y += step->offset.y;
+        vert->z += step->offset.z;
+      }
     }
   }
 }
@@ -223,41 +212,106 @@ static bool parse_def(ak_scanner_t *scanner) {
 
   ak_scanner_skip_whitespace_and_comments(scanner);
 
-  ak_scanner_find_group_result_t array_group =
-      ak_scanner_find_group(scanner, '[', ']', NULL, true);
-  if (!array_group.success) {
+  ak_scanner_find_group_result_t obj_group =
+      ak_scanner_find_group(scanner, '{', '}', NULL, true);
+  if (!obj_group.success) {
     return false;
   }
 
-  size_t array_start = array_group.index_of_start_symbol + 1;
-  size_t array_end = array_group.index_of_closing_symbol;
-  scanner->position = array_end + 1;
+  size_t obj_start = obj_group.index_of_start_symbol + 1;
+  size_t obj_end = obj_group.index_of_closing_symbol;
+  scanner->position = obj_end + 1;
 
   object_t obj;
   strncpy(obj.name, obj_name, 63);
   obj.start_vertex = list_count(&g_state->vertices);
   obj.vertex_count = 0;
+  list_init(&obj.steps);
 
-  size_t saved_pos = scanner->position;
-  scanner->position = array_start;
+  scanner->position = obj_start;
 
-  while (scanner->position < array_end) {
+  while (scanner->position < obj_end) {
     ak_scanner_skip_whitespace_and_comments(scanner);
-    if (scanner->position >= array_end)
+    if (scanner->position >= obj_end)
       break;
 
-    if (data[scanner->position] == '{') {
-      vec3_t v;
-      if (parse_vec3(scanner, &v)) {
-        add_vertex(v.x, v.y, v.z);
-        obj.vertex_count++;
+    uint8_t stop_syms[] = {':'};
+    ak_scanner_stop_symbols_t stop_symbols = {stop_syms, 1};
+    ak_scanner_static_type_result_t field_result =
+        ak_scanner_read_static_base_type(scanner, &stop_symbols);
+    if (!field_result.success)
+      break;
+
+    if (field_result.data.base == AK24_STATIC_BASE_SYMBOL) {
+      char field_name[32] = {0};
+      size_t field_len = field_result.data.byte_length < 31
+                             ? field_result.data.byte_length
+                             : 31;
+      memcpy(field_name, field_result.data.data, field_len);
+
+      ak_scanner_skip_whitespace_and_comments(scanner);
+      if (scanner->position < obj_end && data[scanner->position] == ':') {
+        scanner->position++;
       }
-    } else {
-      scanner->position++;
+
+      ak_scanner_skip_whitespace_and_comments(scanner);
+
+      if (strcmp(field_name, "vertices") == 0) {
+        ak_scanner_find_group_result_t vert_array =
+            ak_scanner_find_group(scanner, '[', ']', NULL, false);
+        if (vert_array.success) {
+          size_t vert_start = vert_array.index_of_start_symbol + 1;
+          size_t vert_end = vert_array.index_of_closing_symbol;
+          scanner->position = vert_start;
+
+          while (scanner->position < vert_end) {
+            ak_scanner_skip_whitespace_and_comments(scanner);
+            if (scanner->position >= vert_end)
+              break;
+
+            if (data[scanner->position] == '{') {
+              vec3_t v;
+              if (parse_vec3(scanner, &v)) {
+                add_vertex(v.x, v.y, v.z);
+                obj.vertex_count++;
+              }
+            } else {
+              scanner->position++;
+            }
+          }
+          scanner->position = vert_array.index_of_closing_symbol + 1;
+        }
+      } else if (strcmp(field_name, "steps") == 0) {
+        ak_scanner_find_group_result_t step_array =
+            ak_scanner_find_group(scanner, '[', ']', NULL, false);
+        if (step_array.success) {
+          size_t step_start = step_array.index_of_start_symbol + 1;
+          size_t step_end = step_array.index_of_closing_symbol;
+          scanner->position = step_start;
+
+          while (scanner->position < step_end) {
+            ak_scanner_skip_whitespace_and_comments(scanner);
+            if (scanner->position >= step_end)
+              break;
+
+            if (data[scanner->position] == '{') {
+              vec3_t offset;
+              if (parse_vec3(scanner, &offset)) {
+                step_t step;
+                step.offset = offset;
+                list_push(&obj.steps, step);
+              }
+            } else {
+              scanner->position++;
+            }
+          }
+          scanner->position = step_array.index_of_closing_symbol + 1;
+        }
+      }
     }
   }
 
-  scanner->position = saved_pos;
+  scanner->position = obj_end + 1;
 
   for (int i = 0; i < obj.vertex_count - 1; i++) {
     add_edge(obj.start_vertex + i, obj.start_vertex + i + 1);
@@ -266,37 +320,91 @@ static bool parse_def(ak_scanner_t *scanner) {
     add_edge(obj.start_vertex + obj.vertex_count - 1, obj.start_vertex);
   }
 
+  int step_count = list_count(&obj.steps);
+  if (step_count > g_state->max_frame) {
+    g_state->max_frame = step_count;
+  }
+
   list_push(&g_state->objects, obj);
   return true;
 }
 
-static bool parse_shift(ak_scanner_t *scanner) {
+static bool parse_camera(ak_scanner_t *scanner) {
   ak_scanner_skip_whitespace_and_comments(scanner);
 
-  ak_scanner_static_type_result_t name_result =
-      ak_scanner_read_static_base_type(scanner, NULL);
-  if (!name_result.success ||
-      name_result.data.base != AK24_STATIC_BASE_SYMBOL) {
+  ak_scanner_find_group_result_t group =
+      ak_scanner_find_group(scanner, '{', '}', NULL, true);
+  if (!group.success) {
     return false;
   }
 
-  char obj_name[64] = {0};
-  size_t name_len =
-      name_result.data.byte_length < 63 ? name_result.data.byte_length : 63;
-  memcpy(obj_name, name_result.data.data, name_len);
+  size_t start = group.index_of_start_symbol + 1;
+  size_t end = group.index_of_closing_symbol;
+  scanner->position = end + 1;
 
-  vec3_t offset;
-  if (!parse_vec3(scanner, &offset)) {
-    return false;
+  ak_buffer_t *buf = scanner->buffer;
+  uint8_t *data = ak_buffer_data(buf);
+
+  float rot_x = 0, rot_y = 0, rot_z = 0, distance = 5.0f;
+  bool found_rot_x = false, found_rot_y = false, found_rot_z = false,
+       found_distance = false;
+
+  for (size_t i = start; i < end; i++) {
+    if (data[i] == 'r' && i + 5 < end &&
+        strncmp((char *)&data[i], "rot_x:", 6) == 0) {
+      i += 6;
+      while (i < end && (data[i] == ' ' || data[i] == '\t'))
+        i++;
+      size_t num_start = i;
+      while (i < end && (data[i] == '-' || data[i] == '.' ||
+                         (data[i] >= '0' && data[i] <= '9')))
+        i++;
+      rot_x = parse_number_from_data(&data[num_start], i - num_start);
+      found_rot_x = true;
+    } else if (data[i] == 'r' && i + 5 < end &&
+               strncmp((char *)&data[i], "rot_y:", 6) == 0) {
+      i += 6;
+      while (i < end && (data[i] == ' ' || data[i] == '\t'))
+        i++;
+      size_t num_start = i;
+      while (i < end && (data[i] == '-' || data[i] == '.' ||
+                         (data[i] >= '0' && data[i] <= '9')))
+        i++;
+      rot_y = parse_number_from_data(&data[num_start], i - num_start);
+      found_rot_y = true;
+    } else if (data[i] == 'r' && i + 5 < end &&
+               strncmp((char *)&data[i], "rot_z:", 6) == 0) {
+      i += 6;
+      while (i < end && (data[i] == ' ' || data[i] == '\t'))
+        i++;
+      size_t num_start = i;
+      while (i < end && (data[i] == '-' || data[i] == '.' ||
+                         (data[i] >= '0' && data[i] <= '9')))
+        i++;
+      rot_z = parse_number_from_data(&data[num_start], i - num_start);
+      found_rot_z = true;
+    } else if (data[i] == 'd' && i + 8 < end &&
+               strncmp((char *)&data[i], "distance:", 9) == 0) {
+      i += 9;
+      while (i < end && (data[i] == ' ' || data[i] == '\t'))
+        i++;
+      size_t num_start = i;
+      while (i < end && (data[i] == '-' || data[i] == '.' ||
+                         (data[i] >= '0' && data[i] <= '9')))
+        i++;
+      distance = parse_number_from_data(&data[num_start], i - num_start);
+      found_distance = true;
+    }
   }
 
-  frame_command_t cmd;
-  strncpy(cmd.object_name, obj_name, 63);
-  cmd.offset = offset;
-  cmd.frame = g_state->max_frame + 1;
-
-  list_push(&g_state->frame_commands, cmd);
-  g_state->max_frame = cmd.frame;
+  if (found_rot_x)
+    g_state->rot_x = rot_x;
+  if (found_rot_y)
+    g_state->rot_y = rot_y;
+  if (found_rot_z)
+    g_state->rot_z = rot_z;
+  if (found_distance)
+    g_state->camera_distance = distance;
 
   return true;
 }
@@ -333,19 +441,16 @@ static bool parse_omgw_file(const char *filepath) {
           result.data.byte_length < 63 ? result.data.byte_length : 63;
       memcpy(keyword, result.data.data, kw_len);
 
-      if (strcmp(keyword, "DEF") == 0) {
+      if (strcmp(keyword, "CAMERA") == 0) {
+        if (!parse_camera(scanner)) {
+          fprintf(stderr, "Failed to parse CAMERA\n");
+        }
+      } else if (strcmp(keyword, "DEF") == 0) {
         if (!parse_def(scanner)) {
           fprintf(stderr, "Failed to parse DEF\n");
         }
-      } else if (strcmp(keyword, "SHIFT") == 0) {
-        if (!parse_shift(scanner)) {
-          fprintf(stderr, "Failed to parse SHIFT\n");
-        }
       } else if (strcmp(keyword, "CLEAR") == 0) {
         clear_objects();
-      } else if (strcmp(keyword, "RESET") == 0) {
-        clear_frame_commands();
-        apply_frame_commands_up_to(0);
       }
     }
   }
@@ -575,11 +680,14 @@ APP_ON_SHUTDOWN(on_shutdown) {
   (void)ctx;
 
   if (g_state) {
+    for (unsigned i = 0; i < list_count(&g_state->objects); i++) {
+      object_t *obj = list_get(&g_state->objects, i);
+      list_deinit(&obj->steps);
+    }
     list_deinit(&g_state->vertices);
     list_deinit(&g_state->base_vertices);
     list_deinit(&g_state->edges);
     list_deinit(&g_state->objects);
-    list_deinit(&g_state->frame_commands);
 
     if (g_state->renderer) {
       SDL_DestroyRenderer(g_state->renderer);
@@ -635,7 +743,6 @@ APP_MAIN(app_main) {
   list_init(&g_state->base_vertices);
   list_init(&g_state->edges);
   list_init(&g_state->objects);
-  list_init(&g_state->frame_commands);
 
   g_state->window =
       SDL_CreateWindow("AK24 3D Space Viewer", SDL_WINDOWPOS_CENTERED,

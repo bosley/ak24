@@ -1,21 +1,105 @@
-; AK24 OMGW File - 3D Object World
-; Commands: DEF, SHIFT, CLEAR, RESET
+; AK24 OMGW File - 3D Object World Demo
+; Multiple objects with synchronized animations
 
-; Define a cube at origin
-DEF cube = [{x: -1, y: -1, z: -1}, {x: 1, y: -1, z: -1}, {x: 1, y: 1, z: -1}, {x: -1, y: 1, z: -1}, {x: -1, y: -1, z: 1}, {x: 1, y: -1, z: 1}, {x: 1, y: 1, z: 1}, {x: -1, y: 1, z: 1}]
+; Set initial camera view for better perspective
+CAMERA {rot_x: 0.4, rot_y: 0.6, rot_z: 0, distance: 15}
 
-; Define a triangle
-DEF triangle = [{x: 3, y: -1, z: 0}, {x: 5, y: -1, z: 0}, {x: 4, y: 1, z: 0}]
+; Spinning cube that moves in a circle
+DEF spinning_cube = {
+  vertices: [
+    {x: -1, y: -1, z: -1}, {x: 1, y: -1, z: -1},
+    {x: 1, y: 1, z: -1}, {x: -1, y: 1, z: -1},
+    {x: -1, y: -1, z: 1}, {x: 1, y: -1, z: 1},
+    {x: 1, y: 1, z: 1}, {x: -1, y: 1, z: 1}
+  ],
+  steps: [
+    {x: 1, y: 0, z: 0.5},
+    {x: 0.7, y: 0, z: 1},
+    {x: 0, y: 0, z: 1},
+    {x: -0.7, y: 0, z: 1},
+    {x: -1, y: 0, z: 0.5},
+    {x: -1, y: 0, z: 0},
+    {x: -0.7, y: 0, z: -0.5},
+    {x: 0, y: 0, z: -1}
+  ]
+}
 
-; Animate the cube moving right
-SHIFT cube {x: 0.5, y: 0, z: 0}
-SHIFT cube {x: 0.5, y: 0, z: 0}
-SHIFT cube {x: 0.5, y: 0, z: 0}
-SHIFT cube {x: 0.5, y: 0, z: 0}
+; Triangle that bounces up and down
+DEF bouncing_triangle = {
+  vertices: [
+    {x: -5, y: -2, z: 0},
+    {x: -3, y: -2, z: 0},
+    {x: -4, y: 0, z: 0}
+  ],
+  steps: [
+    {x: 0, y: 1, z: 0},
+    {x: 0, y: 1.5, z: 0},
+    {x: 0, y: 1, z: 0},
+    {x: 0, y: 0, z: 0},
+    {x: 0, y: -1, z: 0},
+    {x: 0, y: -1, z: 0},
+    {x: 0, y: 0, z: 0},
+    {x: 0, y: 1, z: 0}
+  ]
+}
 
-; Animate the triangle moving up
-SHIFT triangle {x: 0, y: 0.5, z: 0}
-SHIFT triangle {x: 0, y: 0.5, z: 0}
+; Square that slides back and forth
+DEF sliding_square = {
+  vertices: [
+    {x: 3, y: -1, z: -2},
+    {x: 5, y: -1, z: -2},
+    {x: 5, y: 1, z: -2},
+    {x: 3, y: 1, z: -2}
+  ],
+  steps: [
+    {x: 0, y: 0, z: 0.5},
+    {x: 0, y: 0, z: 0.5},
+    {x: 0, y: 0, z: 0.5},
+    {x: 0, y: 0, z: 0.5},
+    {x: 0, y: 0, z: -0.5},
+    {x: 0, y: 0, z: -0.5},
+    {x: 0, y: 0, z: -0.5},
+    {x: 0, y: 0, z: -0.5}
+  ]
+}
 
-; CLEAR - removes all objects (vertices, edges, objects list)
-; RESET - clears animation frames, keeps objects
+; Small pyramid that rises
+DEF rising_pyramid = {
+  vertices: [
+    {x: 0, y: -3, z: 3},
+    {x: 1, y: -3, z: 4},
+    {x: 1, y: -3, z: 3},
+    {x: 0.5, y: -2, z: 3.5}
+  ],
+  steps: [
+    {x: 0, y: 0.3, z: 0},
+    {x: 0, y: 0.3, z: 0},
+    {x: 0, y: 0.3, z: 0},
+    {x: 0, y: 0.3, z: 0},
+    {x: 0, y: 0.3, z: 0},
+    {x: 0, y: 0.3, z: 0},
+    {x: 0, y: 0, z: 0},
+    {x: 0, y: 0, z: 0}
+  ]
+}
+
+; Line that grows
+DEF growing_line = {
+  vertices: [
+    {x: -6, y: 2, z: -3},
+    {x: -5, y: 2, z: -3}
+  ],
+  steps: [
+    {x: 0.2, y: 0, z: 0},
+    {x: 0.2, y: 0, z: 0},
+    {x: 0.2, y: 0, z: 0},
+    {x: 0.2, y: 0, z: 0},
+    {x: -0.2, y: 0, z: 0},
+    {x: -0.2, y: 0, z: 0},
+    {x: -0.2, y: 0, z: 0},
+    {x: -0.2, y: 0, z: 0}
+  ]
+}
+
+; All objects animate together for 8 frames
+; Use Space to toggle auto-play, Left/Right arrows to step through frames

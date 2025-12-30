@@ -28,8 +28,6 @@
 #include "cjit.h"
 #include "context.h"
 #include "filepath.h"
-#include "forms.h"
-#include "forms_primitives.h"
 #include "interfaces.h"
 #include "intern.h"
 #include "lambda.h"

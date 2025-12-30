@@ -111,6 +111,7 @@ file(GLOB_RECURSE KERNEL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/src/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/box/src/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/dmat/src/*.c
 )
 
 # Add base kernel sources (non-platform/GC specific)
@@ -164,6 +165,7 @@ file(GLOB_RECURSE KERNEL_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/box/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/dmat/test/*.c
 )
 
 file(GLOB_RECURSE KERNEL_HEADERS
@@ -216,6 +218,7 @@ target_include_directories(ak24_kernel PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/utf8/include
     ${CMAKE_CURRENT_SOURCE_DIR}/cjit/include
     ${CMAKE_CURRENT_SOURCE_DIR}/box/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/dmat/include
     ${CMAKE_CURRENT_SOURCE_DIR}/api/v1/include
 )
 
@@ -287,6 +290,7 @@ file(GLOB_RECURSE ALL_COMPILE_TIME_TESTS
     ${CMAKE_CURRENT_SOURCE_DIR}/filepath/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/cjit/test/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/box/test/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/dmat/test/*.c
 )
 
 file(GLOB BUFFER_TEST_SOURCES

@@ -131,6 +131,7 @@ add_subdirectory(examples/arena-demo)
 add_subdirectory(examples/thread-pool-demo)
 add_subdirectory(examples/signals-example)
 add_subdirectory(examples/sourceloc-demo)
+add_subdirectory(examples/sdl-example)
 
 # Install build configuration file for tests/external projects
 set(AK24_BUILD_CONFIG_FILE "${CMAKE_BINARY_DIR}/ak24-config.mk")

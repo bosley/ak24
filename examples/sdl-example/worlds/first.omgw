@@ -1,0 +1,21 @@
+; AK24 OMGW File - 3D Object World
+; Commands: DEF, SHIFT, CLEAR, RESET
+
+; Define a cube at origin
+DEF cube = [{x: -1, y: -1, z: -1}, {x: 1, y: -1, z: -1}, {x: 1, y: 1, z: -1}, {x: -1, y: 1, z: -1}, {x: -1, y: -1, z: 1}, {x: 1, y: -1, z: 1}, {x: 1, y: 1, z: 1}, {x: -1, y: 1, z: 1}]
+
+; Define a triangle
+DEF triangle = [{x: 3, y: -1, z: 0}, {x: 5, y: -1, z: 0}, {x: 4, y: 1, z: 0}]
+
+; Animate the cube moving right
+SHIFT cube {x: 0.5, y: 0, z: 0}
+SHIFT cube {x: 0.5, y: 0, z: 0}
+SHIFT cube {x: 0.5, y: 0, z: 0}
+SHIFT cube {x: 0.5, y: 0, z: 0}
+
+; Animate the triangle moving up
+SHIFT triangle {x: 0, y: 0.5, z: 0}
+SHIFT triangle {x: 0, y: 0.5, z: 0}
+
+; CLEAR - removes all objects (vertices, edges, objects list)
+; RESET - clears animation frames, keeps objects

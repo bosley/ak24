@@ -1,0 +1,51 @@
+; AK24 OMGW Demo - Two Moving Triangles
+; Custom animation showcasing 3D triangle movement
+
+; Set camera for optimal viewing
+CAMERA {rot_x: 0.5, rot_y: 0.7, rot_z: 0, distance: 12}
+
+; First triangle - orbits in a circular path
+DEF triangle_orbit = {
+  vertices: [
+    {x: 2, y: -1, z: 0},
+    {x: 3, y: -1, z: 0},
+    {x: 2.5, y: 1, z: 0}
+  ],
+  steps: [
+    {x: 0.5, y: 0, z: 0.5},
+    {x: 0.3, y: 0, z: 0.8},
+    {x: 0, y: 0, z: 1},
+    {x: -0.3, y: 0, z: 0.8},
+    {x: -0.5, y: 0, z: 0.5},
+    {x: -0.7, y: 0, z: 0},
+    {x: -0.5, y: 0, z: -0.5},
+    {x: -0.3, y: 0, z: -0.8},
+    {x: 0, y: 0, z: -1},
+    {x: 0.3, y: 0, z: -0.8}
+  ]
+}
+
+; Second triangle - moves in a wave pattern with vertical motion
+DEF triangle_wave = {
+  vertices: [
+    {x: -3, y: 0, z: 2},
+    {x: -2, y: 0, z: 2},
+    {x: -2.5, y: 2, z: 2}
+  ],
+  steps: [
+    {x: 0.4, y: 0.5, z: 0},
+    {x: 0.4, y: 0.7, z: 0},
+    {x: 0.4, y: 0.5, z: 0},
+    {x: 0.4, y: 0, z: 0},
+    {x: 0.4, y: -0.5, z: 0},
+    {x: 0.4, y: -0.7, z: 0},
+    {x: 0.4, y: -0.5, z: 0},
+    {x: 0.4, y: 0, z: 0},
+    {x: 0.4, y: 0.5, z: 0},
+    {x: 0.4, y: 0.7, z: 0}
+  ]
+}
+
+; Press Space to start/stop animation
+; Use arrow keys to step through frames manually
+; Mouse drag to rotate view, scroll to zoom
